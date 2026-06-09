@@ -48,6 +48,9 @@ export function floatInt(x: bigint, dp: number, absolute: boolean): bigint {
   const f = decode(x);
   if (f.zero) return 0n;
   const shift = f.exp + dp;
+  // guard against a malicious/garbage huge `dp` building an astronomically large BigInt (OOM DoS).
+  if (shift > 308 || shift < -308) return INVALID_FLOAT; // far beyond any real amount; real API overflows
+
   let v: bigint;
   if (shift >= 0) v = f.mant * 10n ** BigInt(shift);
   else v = f.mant / 10n ** BigInt(-shift);

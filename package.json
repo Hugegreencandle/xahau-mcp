@@ -23,6 +23,7 @@
     "fetch:all": "node scripts/fetch-definitions.mjs && node scripts/fetch-hook-api.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {

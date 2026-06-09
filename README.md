@@ -66,16 +66,34 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 
 ## Install
 
+Install straight from GitHub — no npm-registry account needed; it builds on install:
+
 ```bash
-npm install && npm run fetch:all && npm run build
-npm run smoke    # health check + a live mainnet read
-npm test         # ~60 tests (offline)
+npm install -g github:Hugegreencandle/xahau-mcp
+```
+
+Or clone and build:
+```bash
+git clone https://github.com/Hugegreencandle/xahau-mcp && cd xahau-mcp
+npm install        # the `prepare` script compiles dist/ automatically
+npm run smoke      # health check + a live mainnet read
+npm test           # ~60 tests (offline)
 ```
 
 Add to an MCP client (e.g. Claude Code / Desktop):
 ```json
 { "mcpServers": { "xahau": { "command": "node", "args": ["/path/to/xahau-mcp/dist/index.js"] } } }
 ```
+
+## Security
+
+Designed defensively and reviewed (`npm audit` + a danger-surface pass):
+
+- **Read-only & no key custody** — no `sign`/`submit` anywhere; builder tools never accept a secret and only emit *unsigned* transactions to sign offline.
+- **No code-exec surface** — no `eval`/`Function`, no `child_process`/shell, no filesystem writes, no dynamic `require`. RPC `fetch` only ever hits the fixed endpoints in `data/endpoints.json` (or your `XAHAU_RPC_URLS` override) — never a URL built from tool input, so no SSRF.
+- **Untrusted Hook WASM is sandboxed** — `execute_hook`/`fuzz_hook` run hook bytecode in Node's WebAssembly engine, which has no syscall/fs/network access; a hook can only call the in-memory JS Hook-API shims, with bounds-checked memory reads/writes.
+- **Known limits (DoS-of-self, not RCE/exfil):** the VM has no fuel metering beyond guards, so a pathological *unguarded* infinite-loop hook can hang a single run — just cancel it. Tool output is data, not instructions (treat it as such, as with any MCP).
+- **Dependencies:** `npm audit` reports only low-severity advisories transitively under `xrpl-accountlib`'s signing libraries (elliptic/bip32/tiny-secp256k1) — code paths this server never calls (it uses only the binary codec).
 
 ## How it works
 
