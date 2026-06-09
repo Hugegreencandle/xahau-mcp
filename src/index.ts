@@ -19,6 +19,7 @@ import { runHook } from "./sandbox.js";
 import { fuzzHook } from "./fuzz.js";
 import { classifyHook } from "./classify.js";
 import { diffHooks } from "./diff.js";
+import { scaffoldHook } from "./scaffold.js";
 import { computeReward } from "./rewards.js";
 import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
@@ -494,6 +495,20 @@ server.registerTool("hook_report", {
       hookOnDecoded: hookOn ? decodeHookOn(hookOn).firesOn : null,
       feeEstimate: { byteSize: w.byteSize, staticInstructionCount: w.instructionCount, note: "byteSize drives the SetHook fee; instruction count is a complexity proxy (ESTIMATE)." },
     });
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("scaffold_hook", {
+  description: "Generate a starter Xahau Hook in C for a stated intent (accept_all, firewall, payment_limit, require_dest_tag, state_counter, notary) — structurally valid (hook() entry, _g guards, accept/rollback) with build instructions. A STARTING POINT to compile + then verify with analyze_hook/execute_hook before deploying. Offline.",
+  inputSchema: {
+    archetype: z.enum(["accept_all", "firewall", "payment_limit", "require_dest_tag", "state_counter", "notary"]),
+    blockTxType: z.string().optional().describe("for firewall: tx type to reject, e.g. Payment"),
+    maxDrops: z.string().optional().describe("for payment_limit: max native drops to allow"),
+  },
+}, async ({ archetype, blockTxType, maxDrops }) => {
+  try {
+    const s = scaffoldHook({ archetype, blockTxType, maxDrops });
+    return ok(`scaffolded ${archetype} hook (C, ${s.source.split("\n").length} lines) — compile, then analyze_hook/execute_hook before deploy`, s as unknown as Record<string, unknown>);
   } catch (e) { return fail((e as Error).message); }
 });
 
