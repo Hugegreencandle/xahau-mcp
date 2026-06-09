@@ -20,6 +20,7 @@ export interface WasmInfo {
   guardImportIndex: number | null; // function index of `_g`, or null if not imported
   guardCallCount: number;
   loopCount: number;
+  instructionCount: number; // total opcodes across all function bodies (fee/complexity proxy)
   scanComplete: boolean; // false if the opcode walk bailed (counts are then lower bounds)
 }
 
@@ -63,7 +64,7 @@ export function readWasm(bytes: Uint8Array): WasmInfo {
   const info: WasmInfo = {
     valid: false, version: 0, byteSize: bytes.length, imports: [], exports: [],
     memory: null, customSections: [], funcImportCount: 0, guardImportIndex: null,
-    guardCallCount: 0, loopCount: 0, scanComplete: true,
+    guardCallCount: 0, loopCount: 0, instructionCount: 0, scanComplete: true,
   };
   try {
     if (bytes.length < 8 || bytes[0] !== 0x00 || bytes[1] !== 0x61 || bytes[2] !== 0x73 || bytes[3] !== 0x6d) {
@@ -157,6 +158,7 @@ function scanCode(code: Uint8Array, info: WasmInfo): void {
 function walkExpr(s: Reader, end: number, info: WasmInfo): void {
   while (s.p < end) {
     const op = s.buf[s.p++];
+    info.instructionCount++;
     switch (op) {
       case 0x03: info.loopCount++; s.u8(); break; // loop blocktype
       case 0x02: case 0x04: s.u8(); break;        // block / if blocktype (1-byte common case)

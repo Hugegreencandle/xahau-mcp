@@ -58,3 +58,32 @@ export function buildHookWasm(opts: HookOpts = {}): Uint8Array {
 }
 
 export const toHex = (b: Uint8Array): string => Buffer.from(b).toString("hex");
+
+// A hook that actually CALLS accept/rollback with a return code, for the VM (sandbox) tests.
+// Uses two func types: type0 ()->() for hook(); type1 (i32,i32,i64)->i64 for accept/rollback.
+// Optionally calls one extra (unsupported) import first to exercise unsupported-call tracking.
+export function buildExitHook(fn: "accept" | "rollback", code: number, opts: { extraImport?: string } = {}): Uint8Array {
+  if (code < 0 || code > 63) throw new Error("test code must be 0..63 (single-byte sLEB)");
+  const imports: { name: string; type: number }[] = [];
+  if (opts.extraImport) imports.push({ name: opts.extraImport, type: 0 }); // ()->()
+  imports.push({ name: fn, type: 1 }); // (i32,i32,i64)->i64
+  const fnIdx = imports.findIndex((i) => i.name === fn);
+  const extraIdx = opts.extraImport ? 0 : -1;
+
+  const types = section(1, vec([
+    [0x60, 0x00, 0x00], // type0 () -> ()
+    [0x60, 0x03, 0x7f, 0x7f, 0x7e, 0x01, 0x7e], // type1 (i32,i32,i64) -> i64
+  ]));
+  const imp = section(2, vec(imports.map((i) => [...name("env"), ...name(i.name), 0x00, ...uleb(i.type)])));
+  const localFuncIdx = imports.length;
+  const funcs = section(3, vec([[0x00]])); // hook : type0
+  const mem = section(5, vec([[0x00, 0x01]]));
+  const exp = section(7, vec([[...name("hook"), 0x00, ...uleb(localFuncIdx)], [...name("memory"), 0x02, 0x00]]));
+  const body: number[] = [];
+  if (extraIdx >= 0) body.push(0x10, ...uleb(extraIdx)); // call unsupported (()->()), no stack effect
+  body.push(0x41, 0x00, 0x41, 0x00, 0x42, code & 0x7f, 0x10, ...uleb(fnIdx), 0x1a); // i32.const0,i32.const0,i64.const code, call fn, drop
+  body.push(0x0b);
+  const func1 = [...uleb(0), ...body];
+  const code10 = section(10, vec([[...uleb(func1.length), ...func1]]));
+  return new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, ...types, ...imp, ...funcs, ...mem, ...exp, ...code10]);
+}

@@ -14,6 +14,7 @@ import { xahAmount, decodeTxBlob, encodeTxBlob, decodeSetHook, decodeUriTokenId 
 import { readWasm, hexToBytes, base64ToBytes } from "./wasm.js";
 import { lookupHookApi, hookApiCount } from "./hookapi.js";
 import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyzer.js";
+import { runHook } from "./sandbox.js";
 import { computeReward } from "./rewards.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned } from "./builders.js";
@@ -28,7 +29,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "0.1.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "0.2.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -207,7 +208,7 @@ server.registerTool("inspect_hook_wasm", {
     return ok(`WASM ${w.byteSize}B · ${w.imports.length} imports · exports [${ex.join(", ")}] · ${w.loopCount} loop(s)/${w.guardCallCount} guard(s)`, {
       valid: true, byteSize: w.byteSize, hasHook: ex.includes("hook"), hasCbak: ex.includes("cbak"),
       imports: w.imports, exports: w.exports, memory: w.memory, customSections: w.customSections,
-      loopCount: w.loopCount, guardCallCount: w.guardCallCount, scanComplete: w.scanComplete,
+      loopCount: w.loopCount, guardCallCount: w.guardCallCount, instructionCount: w.instructionCount, scanComplete: w.scanComplete,
     });
   } catch (e) { return fail((e as Error).message); }
 });
@@ -265,7 +266,7 @@ server.registerTool("list_rules", {
 }, async () => { const rules = listRules(); return ok(`${rules.length} rules`, { rules }); });
 
 server.registerTool("hook_dry_run", {
-  description: "Honest STATIC dry-run: does this hook fire on a given transaction type (HookOn match), and what exit calls (accept/rollback) does its WASM contain? Labelled STATIC_ONLY — true execution requires xahaud. Offline.",
+  description: "Quick STATIC check: does this hook fire on a given transaction type (HookOn match) and what exit calls does its WASM contain? Labelled STATIC_ONLY. For REAL bytecode execution use execute_hook. Offline.",
   inputSchema: { ...WASM_IN, hookOn: z.string(), candidateTxType: z.string().describe("e.g. \"Payment\"") },
 }, async ({ wasmHex, wasmBase64, hookOn, candidateTxType }) => {
   try {
@@ -277,6 +278,45 @@ server.registerTool("hook_dry_run", {
     return ok(`${fires ? "FIRES" : "does NOT fire"} on ${candidateTxType} · exits: ${exits.join("/") || "none"} · STATIC_ONLY`, {
       firesOnThisTx: fires, candidateTxType, staticExitCalls: exits, hasHook: wasm.exports.some((e) => e.name === "hook"),
       fidelity: "STATIC_ONLY", caveat: "HookOn match + presence of exit-call imports only. Actual accept/rollback outcome depends on runtime state and requires xahaud to execute.",
+    });
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("execute_hook", {
+  description: "GROUNDBREAKING: actually RUN a Hook's real WebAssembly bytecode in a local VM against a simulated transaction + ledger state, and report the true accept/rollback decision, return code/string, state writes, emitted txns and execution trace. The first dev-accessible Hook simulator that needs no xahaud node. Implements a subset of the Hook API; unsupported calls are recorded (fidelity LOCAL_VM, never faked).",
+  inputSchema: {
+    ...WASM_IN,
+    txType: z.string().optional().describe("originating tx type, e.g. \"Payment\""),
+    otxnFields: z.record(z.string(), z.string()).optional().describe("field-id -> hex value of originating-txn fields the hook reads"),
+    otxnParams: z.record(z.string(), z.string()).optional().describe("otxn param name -> hex value"),
+    hookAccountId: z.string().optional().describe("20-byte account-id hex the hook is installed on"),
+    hookParams: z.record(z.string(), z.string()).optional(),
+    state: z.record(z.string(), z.string()).optional().describe("initial hook state: 32-byte key hex -> value hex"),
+    ledgerSeq: z.number().optional(), feeBase: z.number().optional(),
+  },
+}, async ({ wasmHex, wasmBase64, txType, otxnFields, otxnParams, hookAccountId, hookParams, state, ledgerSeq, feeBase }) => {
+  try {
+    const bytes = wasmHex ? hexToBytes(wasmHex) : wasmBase64 ? base64ToBytes(wasmBase64) : null;
+    if (!bytes) return fail("provide wasmHex or wasmBase64");
+    const r = runHook(bytes, { txType, otxnFields, otxnParams, hookAccountId, hookParams, state, ledgerSeq, feeBase });
+    const tail = r.degraded ? " ⚠ DEGRADED" : "";
+    return ok(`${r.exit.toUpperCase()}${r.returnCode !== null ? ` code=${r.returnCode}` : ""}${r.returnString ? ` "${r.returnString}"` : ""} · ${r.stateWrites.length} state write(s) · ${r.emitted.length} emit(s)${tail}`, r as unknown as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("estimate_hook_fee", {
+  description: "Estimate a Hook's cost signals from its WASM: byte size (drives the SetHook fee) and total static instruction count (a complexity/upper-bound proxy for execution fee). Labelled ESTIMATE — the on-ledger execution fee depends on the path actually executed. Offline.",
+  inputSchema: WASM_IN,
+}, async ({ wasmHex, wasmBase64 }) => {
+  try {
+    const bytes = wasmHex ? hexToBytes(wasmHex) : wasmBase64 ? base64ToBytes(wasmBase64) : null;
+    if (!bytes) return fail("provide wasmHex or wasmBase64");
+    const w = readWasm(bytes);
+    if (!w.valid) return fail(w.reason ?? "invalid wasm");
+    return ok(`${w.byteSize} bytes · ${w.instructionCount} static instructions${w.scanComplete ? "" : " (partial scan)"}`, {
+      byteSize: w.byteSize, staticInstructionCount: w.instructionCount, loopCount: w.loopCount,
+      scanComplete: w.scanComplete, fidelity: "ESTIMATE",
+      note: "byteSize drives the one-time SetHook fee; staticInstructionCount is the total opcodes in all function bodies (a complexity proxy). The actual per-invocation execution fee depends on the code path executed at runtime and is not the static count.",
     });
   } catch (e) { return fail((e as Error).message); }
 });
