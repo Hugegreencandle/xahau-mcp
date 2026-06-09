@@ -22,7 +22,8 @@
     "fetch:hookapi": "node scripts/fetch-hook-api.mjs",
     "fetch:all": "node scripts/fetch-definitions.mjs && node scripts/fetch-hook-api.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
