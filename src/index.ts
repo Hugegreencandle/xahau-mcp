@@ -33,7 +33,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "0.6.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "0.7.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -374,6 +374,29 @@ server.registerTool("estimate_hook_fee", {
       byteSize: w.byteSize, staticInstructionCount: w.instructionCount, loopCount: w.loopCount,
       scanComplete: w.scanComplete, fidelity: "ESTIMATE",
       note: "byteSize drives the one-time SetHook fee; staticInstructionCount is the total opcodes in all function bodies (a complexity proxy). The actual per-invocation execution fee depends on the code path executed at runtime and is not the static count.",
+    });
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("hook_report", {
+  description: "One-call comprehensive report on a Hook: structure (imports/exports/size/instructions), a plain-English classification of what it does, the full security analysis (SARIF-lite findings + severity summary), HookOn decode, and a fee estimate. Combines inspect + classify + analyze + estimate. Offline.",
+  inputSchema: { ...WASM_IN, hookOn: z.string().optional(), namespace: z.string().optional(), grants: z.array(z.record(z.string(), z.unknown())).optional() },
+}, async ({ wasmHex, wasmBase64, hookOn, namespace, grants }) => {
+  try {
+    const w = decodeCreateCode({ wasmHex, wasmBase64 });
+    if (!w.valid) return fail(w.reason ?? "invalid wasm", { valid: false });
+    const cls = classifyHook(w, hookOn);
+    const sethook = Boolean(hookOn || namespace || grants);
+    const { findings, summary } = runRules({ wasm: w, hookOn, namespace, grants: grants as HookGrant[] | undefined }, { sethook });
+    const ex = w.exports.map((e) => e.name);
+    const verdict = summary.CRITICAL > 0 ? "❌ CRITICAL issues — do not install" : summary.HIGH > 0 ? "⚠ HIGH-severity issues — review before installing" : "✓ no high/critical findings (still test on testnet)";
+    return ok(`${cls.archetype} · ${findings.length} finding(s) ${summary.CRITICAL}C/${summary.HIGH}H/${summary.MEDIUM}M · ${verdict}`, {
+      verdict,
+      structure: { byteSize: w.byteSize, instructionCount: w.instructionCount, hasHook: ex.includes("hook"), hasCbak: ex.includes("cbak"), imports: w.imports.filter((i) => i.kind === "func").map((i) => i.name), loopCount: w.loopCount, guardCallCount: w.guardCallCount },
+      classification: cls,
+      analysis: { findings, summary },
+      hookOnDecoded: hookOn ? decodeHookOn(hookOn).firesOn : null,
+      feeEstimate: { byteSize: w.byteSize, staticInstructionCount: w.instructionCount, note: "byteSize drives the SetHook fee; instruction count is a complexity proxy (ESTIMATE)." },
     });
   } catch (e) { return fail((e as Error).message); }
 });

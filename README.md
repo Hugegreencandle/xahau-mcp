@@ -29,6 +29,9 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 |---|---|
 | `execute_hook` | **Run the real Hook bytecode in a local VM** against a simulated tx/state → actual accept/rollback, return code, state writes, emits, trace (`LOCAL_VM`). |
 | `fuzz_hook` | **Differential fuzzing**: sweep many generated transactions through the VM to map the hook's accept/rollback **decision boundary** (which tx types / amounts it accepts vs rejects). |
+| `hook_report` | **One-call full report**: structure + plain-English classification + security findings + fee. |
+| `classify_hook` | Infer in plain English what a hook does (firewall/emitter/stateful/financial/…). |
+| `hook_diff` | Compare two hook versions — API/HookOn/size deltas + newly-gained sensitive capabilities. |
 | `analyze_hook` | Run the static-analysis rule engine over a hook → SARIF-lite findings. |
 | `audit_account_hooks` | Pull every hook on an account and analyze all of them. |
 | `inspect_hook_wasm` | Parse CreateCode WASM: imports, exports (`hook`/`cbak`), memory, custom sections, loop, `_g` guard & instruction counts. |
@@ -77,7 +80,7 @@ Or clone and build:
 git clone https://github.com/Hugegreencandle/xahau-mcp && cd xahau-mcp
 npm install        # the `prepare` script compiles dist/ automatically
 npm run smoke      # health check + a live mainnet read
-npm test           # ~60 tests (offline)
+npm test           # ~70 tests (offline)
 ```
 
 Add to an MCP client (e.g. Claude Code / Desktop):
