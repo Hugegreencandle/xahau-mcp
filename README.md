@@ -86,8 +86,15 @@ Or clone and build:
 git clone https://github.com/Hugegreencandle/xahau-mcp && cd xahau-mcp
 npm install        # the `prepare` script compiles dist/ automatically
 npm run smoke      # health check + a live mainnet read
-npm test           # ~70 tests (offline)
+npm test           # ~85 tests (offline)
 ```
+
+Also published to **GitHub Packages** as `@hugegreencandle/xahau-mcp`. GitHub Packages requires auth even for public installs, so add to your `.npmrc`:
+```
+@hugegreencandle:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN   # token with read:packages
+```
+then `npm install -g @hugegreencandle/xahau-mcp`. (The `github:` install above needs no auth and is simpler.)
 
 Add to an MCP client (e.g. Claude Code / Desktop):
 ```json
