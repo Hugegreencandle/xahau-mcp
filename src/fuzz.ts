@@ -9,10 +9,10 @@
 // mixed-radix sweeps over the requested axes. There is NO randomness and NO wall-clock/time source
 // whatsoever, so results are fully reproducible across runs.
 //
-// HONESTY: this inherits the VM's simulated-environment caveat. The Amount axis varies the RAW
-// bytes of an originating-txn field (it is NOT STAmount/XFL-encoded — that math is not implemented
-// bit-exactly here), and the boundary is observed only over the generated inputs (not exhaustive,
-// not a consensus-faithful xahaud replica).
+// HONESTY: this inherits the VM's simulated-environment caveat. The Amount axis now sweeps a real
+// native-XAH STAmount (0x4000000000000000 | drops) — the on-ledger serialization a hook reads;
+// issued-currency (48-byte) amounts are not modeled. The boundary is observed only over the
+// generated inputs (not exhaustive, not a consensus-faithful xahaud replica).
 import { runHook, type SandboxContext, type SandboxResult } from "./sandbox.js";
 import { allTxTypes, txTypeValue } from "./defs.js";
 
@@ -80,9 +80,11 @@ interface MutableCtx {
 
 const hex = (b: Uint8Array) => Buffer.from(b).toString("hex").toUpperCase();
 
-// 8-byte big-endian encoding of a non-negative drops integer (RAW field bytes — NOT STAmount).
+// Native XAH STAmount: 8 bytes, "not-XRP" bit (0x80) clear + "positive" bit (0x40) set, drops in
+// the low 62 bits. i.e. 0x4000000000000000 | drops — the real on-ledger serialization a hook reads
+// (verified: 1,000,000 drops -> 0x40000000000F4240). Issued-currency (48-byte) amounts not modeled.
 function dropsToRawHex(drops: number): string {
-  const n = BigInt(Math.max(0, Math.floor(drops)));
+  const n = 0x4000000000000000n | BigInt(Math.max(0, Math.floor(drops)));
   const out = new Uint8Array(8);
   let v = n;
   for (let i = 7; i >= 0; i--) { out[i] = Number(v & 0xffn); v >>= 8n; }
@@ -113,7 +115,7 @@ function buildAxes(knobs: FuzzKnobs): Axis[] {
     });
   }
 
-  // --- Amount axis (raw field bytes sweep) ---
+  // --- Amount axis (native-XAH STAmount sweep) ---
   if (knobs.amountMin !== undefined || knobs.amountMax !== undefined) {
     const lo = knobs.amountMin ?? 0;
     const hi = knobs.amountMax ?? Math.max(lo, lo + 1_000_000);
@@ -281,7 +283,7 @@ export function fuzzHook(wasmBytes: Uint8Array, base: SandboxContext = {}, knobs
       if (accNums.length && rejNums.length) {
         const maxAcc = Math.max(...accNums);
         const minRej = Math.min(...rejNums);
-        flipPoint = `Amount(raw bytes) accepted up to ${maxAcc} drops, rejected from ${minRej} drops`;
+        flipPoint = `Amount accepted up to ${maxAcc} drops, rejected from ${minRej} drops`;
       }
     }
     if (!flipPoint && accepted.length && rejected.length) {
@@ -315,7 +317,7 @@ export function fuzzHook(wasmBytes: Uint8Array, base: SandboxContext = {}, knobs
   if (inconclusive) {
     caveat = `INCONCLUSIVE: ${counts.halted >= samples ? "every run halted; " : ""}${counts.degraded >= samples ? "every run was DEGRADED; " : ""}${unsupportedCalls.length ? `hook relies on unsupported API(s) [${unsupportedCalls.join(", ")}] returning a sentinel, so no trustworthy accept/rollback decision could be observed. ` : "no clean accept/rollback decision could be observed. "}Cannot report a real decision boundary.`;
   } else {
-    caveat = `Observed over ${samples} deterministically generated inputs (fully reproducible — no randomness, no clock). Amount axis varies RAW originating-field bytes (NOT STAmount/XFL-encoded). Boundary is not exhaustive; runs real bytecode in a simulated environment, not a consensus-faithful xahaud replica.${unsupportedCalls.length ? ` Note: ${counts.degraded} degraded run(s) using unsupported API(s) [${unsupportedCalls.join(", ")}] were counted but excluded from the boundary tally.` : ""}`;
+    caveat = `Observed over ${samples} deterministically generated inputs (fully reproducible — no randomness, no clock). Amount axis sweeps native-XAH STAmount (issued-currency amounts not modeled). Boundary is not exhaustive; runs real bytecode in a simulated environment, not a consensus-faithful xahaud replica.${unsupportedCalls.length ? ` Note: ${counts.degraded} degraded run(s) using unsupported API(s) [${unsupportedCalls.join(", ")}] were counted but excluded from the boundary tally.` : ""}`;
   }
 
   // cleanTotal is intentionally informational; reference to avoid unused warning under strict tsc
