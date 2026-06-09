@@ -18,7 +18,9 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 
 - **Read-only** toward the network. There is no `submit` and no `sign` anywhere in this server.
 - **No key custody.** Builder tools never accept a secret/seed and always return an **unsigned** transaction plus instructions to sign offline (e.g. with [xaman](https://xaman.app) or `xrpl-accountlib`). They default to **testnet**.
-- **Honest fidelity.** `execute_hook` runs the **real bytecode** but against a **simulated environment** with an implemented **subset** of the 78-function Hook API; any unsupported call (the heavy `slot_*`/`sto_*`/full XFL machinery) returns a sentinel and is listed in `unsupportedCalls`, marking the run `degraded` — never faked. It is **not** a consensus-faithful `xahaud` replica; always confirm on testnet. `hook_dry_run` is `STATIC_ONLY`, `compute_reward` is `DOCUMENTED_MODEL`, `estimate_hook_fee` is `ESTIMATE`. The server never pretends to more certainty than it has.
+- **Honest fidelity.** `execute_hook` runs the **real bytecode** against a **simulated environment**. The VM implements a large slice of the 78-function Hook API — the full **XFL float** API (verified against `float_one`), the **slot** table + **STObject subfield extraction** (`slot_subfield`/`sto_subfield`, byte-exact against real txns), state, `otxn_*`/`hook_*`, `util_accid`/`util_raddr`/`util_verify`/`util_sha512h`, and more. What it cannot do faithfully is honestly recorded: anything needing live-ledger resolution (`util_keylet`/`slot_set` against the chain — impossible in a synchronous VM), `meta_slot`, and STObject mutation (`sto_emplace`/`erase`) return the real `NOT_IMPLEMENTED` code and are listed in `unsupportedCalls`, marking the run `degraded` — **never faked**. It is **not** a consensus-faithful `xahaud` replica; always confirm on testnet. `hook_dry_run` is `STATIC_ONLY`, `compute_reward` is `DOCUMENTED_MODEL`, `estimate_hook_fee` is `ESTIMATE`.
+
+- **Resources & prompts.** Beyond tools, the server exposes MCP **resources** (`xahau://rules`, `xahau://hook-api`, `xahau://tx-types`) and guided **prompts** (`audit_hook`, `simulate_hook`, `explain_hook`) so agents can pull reference data and run the common workflows directly.
 
 ## Tools
 
@@ -26,6 +28,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | Tool | Purpose |
 |---|---|
 | `execute_hook` | **Run the real Hook bytecode in a local VM** against a simulated tx/state → actual accept/rollback, return code, state writes, emits, trace (`LOCAL_VM`). |
+| `fuzz_hook` | **Differential fuzzing**: sweep many generated transactions through the VM to map the hook's accept/rollback **decision boundary** (which tx types / amounts it accepts vs rejects). |
 | `analyze_hook` | Run the static-analysis rule engine over a hook → SARIF-lite findings. |
 | `audit_account_hooks` | Pull every hook on an account and analyze all of them. |
 | `inspect_hook_wasm` | Parse CreateCode WASM: imports, exports (`hook`/`cbak`), memory, custom sections, loop, `_g` guard & instruction counts. |

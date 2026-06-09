@@ -18,10 +18,23 @@ describe("Hook VM (sandbox)", () => {
   });
 
   it("records unsupported API calls and marks the run degraded", () => {
-    const r = runHook(buildExitHook("accept", 1, { extraImport: "slot_subfield" }));
+    const r = runHook(buildExitHook("accept", 1, { extraImport: "meta_slot" }));
     expect(r.exit).toBe("accept");
-    expect(r.unsupportedCalls).toContain("slot_subfield");
+    expect(r.unsupportedCalls).toContain("meta_slot");
     expect(r.degraded).toBe(true);
+  });
+
+  it("HONESTY: a data-bearing stub called without ctx is recorded unsupported + degraded", () => {
+    // otxn_id is only fake-safe if ctx supplies it; without it the run must be degraded
+    const r = runHook(buildExitHook("accept", 1, { extraImport: "otxn_id" }));
+    expect(r.unsupportedCalls).toContain("otxn_id");
+    expect(r.degraded).toBe(true);
+  });
+
+  it("a supported call (util_sha512h) does NOT mark the run degraded", () => {
+    const r = runHook(buildExitHook("accept", 1, { extraImport: "util_sha512h" }));
+    expect(r.unsupportedCalls).not.toContain("util_sha512h");
+    expect(r.degraded).toBe(false);
   });
 
   it("reports a hook that never calls accept/rollback", () => {

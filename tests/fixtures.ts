@@ -59,6 +59,52 @@ export function buildHookWasm(opts: HookOpts = {}): Uint8Array {
 
 export const toHex = (b: Uint8Array): string => Buffer.from(b).toString("hex");
 
+// A hook whose decision DEPENDS on input: accepts iff otxn_type() == acceptTxValue, else rollbacks.
+// Exercises the fuzzer's per-axis boundary detection over the txType axis.
+// Imports: env.otxn_type ()->i64 (type1), env.accept/env.rollback (i32,i32,i64)->i64 (type2).
+export function buildBranchOnTxTypeHook(acceptTxValue: number): Uint8Array {
+  if (acceptTxValue < 0 || acceptTxValue > 63) throw new Error("acceptTxValue must be 0..63 (single-byte sLEB i64.const)");
+  // imports order: otxn_type(0), accept(1), rollback(2)
+  const imports = [
+    { name: "otxn_type", type: 1 },
+    { name: "accept", type: 2 },
+    { name: "rollback", type: 2 },
+  ];
+  const otxnIdx = 0, acceptIdx = 1, rollbackIdx = 2;
+  const localFuncIdx = imports.length; // hook()
+
+  const types = section(1, vec([
+    [0x60, 0x00, 0x00], // type0 () -> ()  (hook)
+    [0x60, 0x00, 0x01, 0x7e], // type1 () -> i64  (otxn_type)
+    [0x60, 0x03, 0x7f, 0x7f, 0x7e, 0x01, 0x7e], // type2 (i32,i32,i64) -> i64 (accept/rollback)
+  ]));
+  const imp = section(2, vec(imports.map((i) => [...name("env"), ...name(i.name), 0x00, ...uleb(i.type)])));
+  const funcs = section(3, vec([[0x00]])); // hook : type0
+  const mem = section(5, vec([[0x00, 0x01]]));
+  const exp = section(7, vec([[...name("hook"), 0x00, ...uleb(localFuncIdx)], [...name("memory"), 0x02, 0x00]]));
+
+  const body: number[] = [];
+  // otxn_type()  -> i64 on stack
+  body.push(0x10, ...uleb(otxnIdx));
+  // i64.const acceptTxValue
+  body.push(0x42, acceptTxValue & 0x7f);
+  // i64.eq -> i32
+  body.push(0x51);
+  // if (blocktype empty 0x40) ... else ... end
+  body.push(0x04, 0x40);
+  //   accept(0,0,1) drop
+  body.push(0x41, 0x00, 0x41, 0x00, 0x42, 0x01, 0x10, ...uleb(acceptIdx), 0x1a);
+  body.push(0x05); // else
+  //   rollback(0,0,0) drop
+  body.push(0x41, 0x00, 0x41, 0x00, 0x42, 0x00, 0x10, ...uleb(rollbackIdx), 0x1a);
+  body.push(0x0b); // end if
+  body.push(0x0b); // end function
+
+  const func1 = [...uleb(0), ...body];
+  const code10 = section(10, vec([[...uleb(func1.length), ...func1]]));
+  return new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, ...types, ...imp, ...funcs, ...mem, ...exp, ...code10]);
+}
+
 // A hook that actually CALLS accept/rollback with a return code, for the VM (sandbox) tests.
 // Uses two func types: type0 ()->() for hook(); type1 (i32,i32,i64)->i64 for accept/rollback.
 // Optionally calls one extra (unsupported) import first to exercise unsupported-call tracking.

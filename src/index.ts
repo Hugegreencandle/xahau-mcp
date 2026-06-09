@@ -12,9 +12,10 @@ import * as rpc from "./rpc.js";
 import { decodeHookOn, encodeHookOn } from "./hookon.js";
 import { xahAmount, decodeTxBlob, encodeTxBlob, decodeSetHook, decodeUriTokenId } from "./codec.js";
 import { readWasm, hexToBytes, base64ToBytes } from "./wasm.js";
-import { lookupHookApi, hookApiCount } from "./hookapi.js";
+import { lookupHookApi, hookApiCount, HOOK_FUNCTIONS } from "./hookapi.js";
 import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyzer.js";
 import { runHook } from "./sandbox.js";
+import { fuzzHook } from "./fuzz.js";
 import { computeReward } from "./rewards.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned } from "./builders.js";
@@ -29,7 +30,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "0.2.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "0.3.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -304,6 +305,41 @@ server.registerTool("execute_hook", {
   } catch (e) { return fail((e as Error).message); }
 });
 
+server.registerTool("fuzz_hook", {
+  description: "DIFFERENTIAL FUZZER: finds a Hook's accept/rollback decision boundary by running its REAL bytecode through the local VM against many DETERMINISTICALLY generated inputs (no randomness, no clock — fully reproducible). Sweeps axes you request: txType (a supplied list or all tx types), a raw otxn Amount-field byte range, otxn account/destination ids, and named otxn params. Reports counts {accept,rollback,halted,degraded}, per-axis boundary findings, and concrete accepting/rejecting sample inputs. Honest: degraded/halted runs are counted but excluded from the boundary; if every run degrades/halts it says INCONCLUSIVE and why. fidelity LOCAL_VM_FUZZ.",
+  inputSchema: {
+    ...WASM_IN,
+    txTypes: z.array(z.string()).optional().describe("txType axis: tx types to sweep, e.g. [\"Payment\",\"Invoke\"]. Default: all known tx types (capped)."),
+    amountMin: z.number().optional().describe("Amount axis low (raw drops; field bytes are NOT STAmount-encoded)"),
+    amountMax: z.number().optional().describe("Amount axis high (raw drops)"),
+    amountField: z.number().optional().describe("otxn field id to write the Amount sweep into (default 6)"),
+    sweepAccount: z.boolean().optional().describe("also sweep a few deterministic account ids"),
+    sweepDestination: z.boolean().optional().describe("also sweep a few deterministic destination ids"),
+    paramSweep: z.record(z.string(), z.array(z.string())).optional().describe("named otxn params -> candidate hex values to sweep"),
+    samples: z.number().optional().describe("number of generated inputs (default 64, max 512)"),
+    // base context the sweeps mutate
+    txType: z.string().optional().describe("base originating tx type"),
+    otxnFields: z.record(z.string(), z.string()).optional(),
+    otxnParams: z.record(z.string(), z.string()).optional(),
+    hookAccountId: z.string().optional(),
+    hookParams: z.record(z.string(), z.string()).optional(),
+    state: z.record(z.string(), z.string()).optional(),
+    ledgerSeq: z.number().optional(), feeBase: z.number().optional(),
+  },
+}, async ({ wasmHex, wasmBase64, txTypes, amountMin, amountMax, amountField, sweepAccount, sweepDestination, paramSweep, samples, txType, otxnFields, otxnParams, hookAccountId, hookParams, state, ledgerSeq, feeBase }) => {
+  try {
+    const bytes = wasmHex ? hexToBytes(wasmHex) : wasmBase64 ? base64ToBytes(wasmBase64) : null;
+    if (!bytes) return fail("provide wasmHex or wasmBase64");
+    const base = { txType, otxnFields, otxnParams, hookAccountId, hookParams, state, ledgerSeq, feeBase };
+    const r = fuzzHook(bytes, base, { txTypes, amountMin, amountMax, amountField, sweepAccount, sweepDestination, paramSweep, samples });
+    const head = r.inconclusive
+      ? `INCONCLUSIVE over ${r.samples} inputs`
+      : `${r.samples} inputs · accept=${r.counts.accept} rollback=${r.counts.rollback} halted=${r.counts.halted} degraded=${r.counts.degraded}`;
+    const firstBoundary = r.boundaries.length ? ` · ${r.boundaries[0]}` : "";
+    return ok(`${head}${firstBoundary}`, r as unknown as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message); }
+});
+
 server.registerTool("estimate_hook_fee", {
   description: "Estimate a Hook's cost signals from its WASM: byte size (drives the SetHook fee) and total static instruction count (a complexity/upper-bound proxy for execution fee). Labelled ESTIMATE — the on-ledger execution fee depends on the path actually executed. Offline.",
   inputSchema: WASM_IN,
@@ -392,6 +428,102 @@ server.registerTool("build_payment_unsigned", {
   description: "Assemble an UNSIGNED XAH Payment (amount in drops). Returns unsigned JSON + offline signing instructions + payload preflight. Never signs; testnet by default.",
   inputSchema: { account: z.string().min(25), destination: z.string().min(25), amountXahDrops: z.string(), destinationTag: z.number().optional(), network: NET.default("testnet") },
 }, async (a) => { try { const r = buildPaymentUnsigned(a as any); return ok(`unsigned Payment ${a.amountXahDrops} drops → ${a.destination} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
+
+/* ===================== Resources — offline reference data ===================== */
+// SDK 1.29.0: server.registerResource(name, uri, { ...ResourceMetadata }, async (uri) => ({ contents: [...] }))
+
+function jsonResource(uri: string, payload: unknown) {
+  return { contents: [{ uri, mimeType: "application/json", text: JSON.stringify(payload, null, 2) }] };
+}
+
+server.registerResource(
+  "analyzer-rules",
+  "xahau://rules",
+  { title: "Hook analyzer rule registry", description: "Every rule in the Hooks static-analysis / security engine (id, severity, title, category, requires). Offline.", mimeType: "application/json" },
+  async (uri) => { const rules = listRules(); return jsonResource(uri.href, { count: rules.length, rules }); },
+);
+
+server.registerResource(
+  "hook-api",
+  "xahau://hook-api",
+  { title: "Hook API catalog", description: "The Hook API functions (category, exit/guard role, hazard metadata) used by Xahau Hooks. Offline.", mimeType: "application/json" },
+  async (uri) => jsonResource(uri.href, { count: hookApiCount(), functions: HOOK_FUNCTIONS }),
+);
+
+server.registerResource(
+  "tx-types",
+  "xahau://tx-types",
+  { title: "Transaction-type table", description: "Xahau transaction types and their numeric codes (from network definitions). Offline.", mimeType: "application/json" },
+  async (uri) => { const types = allTxTypes(); return jsonResource(uri.href, { count: types.length, txTypes: types }); },
+);
+
+/* ===================== Prompts — guided templates ===================== */
+// SDK 1.29.0: server.registerPrompt(name, { title?, description?, argsSchema }, (args) => ({ messages: [...] }))
+
+function userText(text: string) {
+  return { role: "user" as const, content: { type: "text" as const, text } };
+}
+
+server.registerPrompt(
+  "audit_hook",
+  {
+    title: "Audit a Hook's WASM",
+    description: "Guide the agent through a full offline security audit of a Hook's CreateCode: inspect → analyze → summarize.",
+    argsSchema: { wasmHex: z.string().describe("Hook CreateCode WASM as hex") },
+  },
+  ({ wasmHex }) => ({
+    messages: [userText(
+      `Perform a complete offline security audit of this Xahau Hook. Do it in three steps and report each:\n` +
+      `1. Call \`inspect_hook_wasm\` with wasmHex="${wasmHex}" to read its imports, exports, memory, loop/guard counts.\n` +
+      `2. Call \`analyze_hook\` with the same wasmHex to run the static-analysis rule engine and collect SARIF-lite findings.\n` +
+      `3. Summarize: list every finding grouped by severity (CRITICAL/HIGH/MEDIUM/LOW/INFO), explain what each means in plain English, and give an overall risk verdict. Reference the \`xahau://rules\` resource for rule details. Stay strictly read-only; never sign or submit anything.`,
+    )],
+  }),
+);
+
+server.registerPrompt(
+  "simulate_hook",
+  {
+    title: "Simulate a Hook's execution",
+    description: "Guide the agent to run a Hook's real bytecode in the local VM, then fuzz its decision boundary.",
+    argsSchema: {
+      wasmHex: z.string().describe("Hook CreateCode WASM as hex"),
+      txType: z.string().optional().describe("originating transaction type, e.g. Payment"),
+    },
+  },
+  ({ wasmHex, txType }) => ({
+    messages: [userText(
+      `Simulate this Xahau Hook against a transaction using the local VM (no node required). Two steps:\n` +
+      `1. Call \`execute_hook\` with wasmHex="${wasmHex}"${txType ? ` and txType="${txType}"` : ""} and report the true accept/rollback decision, return code/string, state writes, emitted txns and trace. Note the fidelity label and any DEGRADED runs.\n` +
+      `2. Call \`fuzz_hook\` with the same wasmHex${txType ? ` and txType="${txType}"` : ""} to find the accept/rollback decision boundary across deterministically generated inputs. Report the counts {accept,rollback,halted,degraded}, the per-axis boundaries, and a concrete accepting and rejecting sample. If it reports INCONCLUSIVE, explain why. Stay read-only.`,
+    )],
+  }),
+);
+
+server.registerPrompt(
+  "explain_hook",
+  {
+    title: "Explain a Hook in plain English",
+    description: "Guide the agent to decode a Hook (by on-ledger hash or raw WASM) and explain what it does.",
+    argsSchema: {
+      hookHash: z.string().optional().describe("on-ledger HookDefinition hash (64 hex)"),
+      wasmHex: z.string().optional().describe("Hook CreateCode WASM as hex"),
+    },
+  },
+  ({ hookHash, wasmHex }) => {
+    const source = hookHash
+      ? `First call \`get_hook_definition\` with hookHash="${hookHash}" to fetch the on-ledger CreateCode WASM, then use that WASM for the next steps.`
+      : wasmHex
+        ? `Use this CreateCode WASM directly: wasmHex="${wasmHex}".`
+        : `No hook was supplied — ask the user for a hookHash or wasmHex before continuing.`;
+    return {
+      messages: [userText(
+        `Explain what this Xahau Hook does, for a non-expert. ${source}\n` +
+        `Then: call \`inspect_hook_wasm\` to see its imports/exports; if a HookOn is available call \`decode_hook_on\` to learn which transaction types it fires on; look up unfamiliar Hook API functions with \`hook_api_lookup\` (or the \`xahau://hook-api\` resource). Finally write a clear plain-English explanation: what triggers it, what it reads, what it does, and whether it can accept or rollback transactions. Strictly read-only.`,
+      )],
+    };
+  },
+);
 
 /* ===================== smoke / main ===================== */
 
