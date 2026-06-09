@@ -12,6 +12,7 @@ import * as rpc from "./rpc.js";
 import { decodeHookOn, encodeHookOn } from "./hookon.js";
 import { xahAmount, decodeTxBlob, encodeTxBlob, decodeSetHook, decodeUriTokenId } from "./codec.js";
 import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTime, decodeAmount, describeTx } from "./util.js";
+import { decodeXpop } from "./xpop.js";
 import { readWasm, hexToBytes, base64ToBytes } from "./wasm.js";
 import { lookupHookApi, hookApiCount, HOOK_FUNCTIONS } from "./hookapi.js";
 import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyzer.js";
@@ -42,7 +43,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "0.9.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "1.0.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -270,6 +271,14 @@ server.registerTool("ripple_time", {
   description: "Convert between Ripple time (seconds since 2000-01-01), Unix time, and ISO 8601. Xahau tx/ledger timestamps use Ripple time. Offline.",
   inputSchema: { ripple: z.number().optional(), unix: z.number().optional(), iso: z.string().optional() },
 }, async ({ ripple, unix, iso }) => { try { const t = rippleTime({ ripple, unix, iso }); return ok(`ripple ${t.rippleTime} = ${t.iso}`, t); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("decode_xpop", {
+  description: "Decode an XPOP (Xahau Proof of Payment) — the proof blob inside an Import/Burn2Mint tx. Accepts the Import Blob hex (hex of the XPOP JSON) or the XPOP JSON itself. Returns the source ledger header, the decoded inner BURN transaction (type, burned drops = its Fee, target network), and the UNL validator set. Offline.",
+  inputSchema: { xpop: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Import Blob hex, XPOP JSON string, or XPOP object") },
+}, async ({ xpop }) => {
+  try { const d = decodeXpop(xpop as string | Record<string, unknown>); return ok(d.summary, d as unknown as Record<string, unknown>); }
+  catch (e) { return fail((e as Error).message); }
+});
 
 server.registerTool("decode_amount", {
   description: "Decode an amount: native drops (digits), a serialized 8-byte native or 48-byte issued STAmount (hex), or an issued amount object {currency,issuer,value} → normalized value/currency/issuer. Offline.",

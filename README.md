@@ -32,6 +32,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | `hook_report` | **One-call full report**: structure + plain-English classification + security findings + fee. |
 | `classify_hook` | Infer in plain English what a hook does (firewall/emitter/stateful/financial/…). |
 | `hook_diff` | Compare two hook versions — API/HookOn/size deltas + newly-gained sensitive capabilities. |
+| `scaffold_hook` | **Generate a starter Hook in C** for an intent (firewall/payment-limit/state-counter/…) — then verify with analyze/execute. |
 | `analyze_hook` | Run the static-analysis rule engine over a hook → SARIF-lite findings. |
 | `audit_account_hooks` | Pull every hook on an account and analyze all of them. |
 | `inspect_hook_wasm` | Parse CreateCode WASM: imports, exports (`hook`/`cbak`), memory, custom sections, loop, `_g` guard & instruction counts. |
@@ -46,6 +47,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | `decode_sethook` | A SetHook tx → its hook definitions, HookOn decoded. |
 | `decode_tx_blob` / `encode_tx_blob` | Xahau tx blob ⇄ JSON (unsigned). |
 | `decode_uritoken_id` · `xah_amount` | URIToken ID validation · XAH⇄drops. |
+| `decode_xpop` | Decode an Import/Burn2Mint XPOP → source ledger, inner burn tx, burned drops, UNL validators. |
 | `validate_address` · `xaddress` | Validate classic/X-address (type, account-id, tag) · encode/decode X-addresses. |
 | `currency_code` · `ripple_time` | 3-char ISO ⇄ 160-bit currency · Ripple-time ⇄ Unix/ISO. |
 | `decode_amount` | Decode native drops / 8-byte / 48-byte issued STAmount / amount object → value+currency+issuer. |
@@ -86,7 +88,7 @@ Or clone and build:
 git clone https://github.com/Hugegreencandle/xahau-mcp && cd xahau-mcp
 npm install        # the `prepare` script compiles dist/ automatically
 npm run smoke      # health check + a live mainnet read
-npm test           # ~85 tests (offline)
+npm test           # ~115 tests (offline)
 ```
 
 Also published to **GitHub Packages** as `@hugegreencandle/xahau-mcp`. GitHub Packages requires auth even for public installs, so add to your `.npmrc`:
