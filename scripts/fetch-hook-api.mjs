@@ -30,7 +30,7 @@ const HAZ = {
   state_foreign_set: [{ ruleId: "HOOK-008-STATE-UNBOUNDED", severity: "MEDIUM", note: "writes state on ANOTHER account; needs a HookGrant" }, { ruleId: "HOOK-007-DANGEROUS-GRANT", severity: "HIGH", note: "foreign-state writes depend on grants" }],
   hook_again: [{ ruleId: "HOOK-010-REENTRANCY-EMIT", severity: "MEDIUM", note: "re-triggers the hook; verify termination" }],
 };
-const floatHaz = [{ ruleId: "HOOK-012-FLOAT-MISUSE", severity: "LOW", note: "XFL float result must use float_* ops, not native arithmetic" }];
+const floatHaz = [{ ruleId: "HOOK-012-FLOAT-USAGE", severity: "LOW", note: "XFL float result must use float_* ops, not native arithmetic" }];
 
 const functions = names.sort().map((name) => {
   const category = catOf(name);

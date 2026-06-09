@@ -42,8 +42,8 @@ export const RULES: Rule[] = [
     check: (c) => !exportNames(c.wasm).has("hook") ? { ruleId: "HOOK-002-NO-HOOK-EXPORT", severity: "CRITICAL", message: "No exported `hook` function. Every Hook must export hook() (cbak() is optional)." } : null,
   },
   {
-    id: "HOOK-003-EMIT-NO-CBAK", severity: "HIGH", title: "emit() used without a cbak() callback", category: "etxn", requires: "wasm",
-    check: (c) => importNames(c.wasm).has("emit") && !exportNames(c.wasm).has("cbak") ? { ruleId: "HOOK-003-EMIT-NO-CBAK", severity: "HIGH", message: "Hook calls emit() but exports no cbak(); the emitted-transaction callback is unhandled." } : null,
+    id: "HOOK-003-EMIT-NO-CBAK", severity: "INFO", title: "emit() without a cbak() callback (advisory)", category: "etxn", requires: "wasm",
+    check: (c) => importNames(c.wasm).has("emit") && !exportNames(c.wasm).has("cbak") ? { ruleId: "HOOK-003-EMIT-NO-CBAK", severity: "INFO", message: "Hook calls emit() but exports no cbak(). cbak() is optional; this is fine unless you need to react to the emitted transaction's result." } : null,
   },
   {
     id: "HOOK-004-UNKNOWN-IMPORT", severity: "HIGH", title: "Imports an unknown/forbidden env function", category: "imports", requires: "wasm",
@@ -64,8 +64,8 @@ export const RULES: Rule[] = [
       .map((g) => ({ ruleId: "HOOK-007-DANGEROUS-GRANT", severity: "HIGH" as const, message: `HookGrant authorizes ${g.HookGrant.Authorize} to modify this hook's state — privilege-escalation surface; confirm it is intended.`, location: { detail: g.HookGrant.Authorize } })),
   },
   {
-    id: "HOOK-008-STATE-UNBOUNDED", severity: "MEDIUM", title: "Unbounded hook-state write", category: "state", requires: "wasm",
-    check: (c) => { const im = importNames(c.wasm); const foreign = im.has("state_foreign_set"); if (im.has("state_set") || foreign) return { ruleId: "HOOK-008-STATE-UNBOUNDED", severity: "MEDIUM", message: `Hook writes state via ${foreign ? "state_foreign_set" : "state_set"}; ensure value sizes are bounded to avoid reserve/bloat issues.` }; return null; },
+    id: "HOOK-008-STATE-UNBOUNDED", severity: "LOW", title: "Hook-state write — confirm bounds (advisory)", category: "state", requires: "wasm",
+    check: (c) => { const im = importNames(c.wasm); const foreign = im.has("state_foreign_set"); if (im.has("state_set") || foreign) return { ruleId: "HOOK-008-STATE-UNBOUNDED", severity: foreign ? "MEDIUM" : "LOW", message: `Hook writes state via ${foreign ? "state_foreign_set (writes to ANOTHER account — confirm the HookGrant and bounds)" : "state_set; confirm value sizes are bounded to avoid reserve/bloat"}.` }; return null; },
   },
   {
     id: "HOOK-009-EMIT-COUNT-RESERVE", severity: "MEDIUM", title: "emit() without etxn_reserve()", category: "etxn", requires: "wasm",
@@ -80,8 +80,8 @@ export const RULES: Rule[] = [
     check: (c) => c.wasm.byteSize > OVERSIZE_BYTES ? { ruleId: "HOOK-011-OVERSIZE-WASM", severity: "LOW", message: `WASM is ${c.wasm.byteSize} bytes (> ${OVERSIZE_BYTES}); SetHook fee scales with size — consider trimming.` } : null,
   },
   {
-    id: "HOOK-012-FLOAT-MISUSE", severity: "LOW", title: "Uses XFL float API", category: "float", requires: "wasm",
-    check: (c) => [...importNames(c.wasm)].some((n) => n.startsWith("float_")) ? { ruleId: "HOOK-012-FLOAT-MISUSE", severity: "LOW", message: "Hook uses the float_* (XFL) API; ensure results are handled with float_* operations, never native arithmetic, and compared via float_compare." } : null,
+    id: "HOOK-012-FLOAT-USAGE", severity: "INFO", title: "Uses the XFL float API (advisory)", category: "float", requires: "wasm",
+    check: (c) => [...importNames(c.wasm)].some((n) => n.startsWith("float_")) ? { ruleId: "HOOK-012-FLOAT-USAGE", severity: "INFO", message: "Hook uses the float_* (XFL) API. Reminder: handle results only with float_* operations (never native arithmetic) and compare via float_compare." } : null,
   },
   {
     id: "HOOK-013-MEMORY-EXCESS", severity: "LOW", title: "Declares excess linear memory", category: "size", requires: "wasm",
@@ -92,8 +92,8 @@ export const RULES: Rule[] = [
     check: (c) => c.namespace && (c.existingNamespaces ?? []).includes(c.namespace) ? { ruleId: "SETHOOK-001-NS-COLLISION", severity: "MEDIUM", message: `HookNamespace ${c.namespace} is already used by another hook on this account; state will be shared/overwritten.` } : null,
   },
   {
-    id: "SETHOOK-002-MISSING-NAMESPACE", severity: "LOW", title: "State used without a namespace", category: "sethook", requires: "sethook",
-    check: (c) => { const im = importNames(c.wasm); const usesState = im.has("state") || im.has("state_set"); return usesState && !c.namespace ? { ruleId: "SETHOOK-002-MISSING-NAMESPACE", severity: "LOW", message: "Hook uses state but no HookNamespace was supplied; state defaults may collide across hooks." } : null; },
+    id: "SETHOOK-002-MISSING-NAMESPACE", severity: "INFO", title: "State used without an explicit namespace (advisory)", category: "sethook", requires: "sethook",
+    check: (c) => { const im = importNames(c.wasm); const usesState = im.has("state") || im.has("state_set"); return usesState && !c.namespace ? { ruleId: "SETHOOK-002-MISSING-NAMESPACE", severity: "INFO", message: "Hook uses state but no explicit HookNamespace was supplied; a default namespace will be used. Set one to isolate this hook's state from others on the account." } : null; },
   },
   {
     id: "SETHOOK-003-HOOKON-EMPTY", severity: "INFO", title: "HookOn fires on nothing (inert)", category: "hookon", requires: "sethook",
