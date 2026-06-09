@@ -16,6 +16,8 @@ import { lookupHookApi, hookApiCount, HOOK_FUNCTIONS } from "./hookapi.js";
 import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyzer.js";
 import { runHook } from "./sandbox.js";
 import { fuzzHook } from "./fuzz.js";
+import { classifyHook } from "./classify.js";
+import { diffHooks } from "./diff.js";
 import { computeReward } from "./rewards.js";
 import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
@@ -373,6 +375,34 @@ server.registerTool("estimate_hook_fee", {
       scanComplete: w.scanComplete, fidelity: "ESTIMATE",
       note: "byteSize drives the one-time SetHook fee; staticInstructionCount is the total opcodes in all function bodies (a complexity proxy). The actual per-invocation execution fee depends on the code path executed at runtime and is not the static count.",
     });
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("classify_hook", {
+  description: "Infer in plain English what a Hook DOES (firewall/filter, emitter, stateful processor, financial/XFL, authorizer, autonomous agent…) from its structure — imports, hook/cbak exports, HookOn, state/emit/float/guard usage. Heuristic, offline; does not execute the bytecode.",
+  inputSchema: { ...WASM_IN, hookOn: z.string().optional() },
+}, async ({ wasmHex, wasmBase64, hookOn }) => {
+  try {
+    const w = decodeCreateCode({ wasmHex, wasmBase64 });
+    if (!w.valid) return fail(w.reason ?? "invalid wasm", { valid: false });
+    const c = classifyHook(w, hookOn);
+    return ok(`${c.archetype} (${c.confidence}) — ${c.summary}`, c as unknown as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("hook_diff", {
+  description: "Compare two Hook versions (before/after an upgrade): imports/exports added or removed, HookOn changes, size/instruction deltas, and any newly-gained security-sensitive capability (emit, foreign-state write, hook_again, signature verify). Offline.",
+  inputSchema: {
+    beforeWasmHex: z.string().optional(), beforeWasmBase64: z.string().optional(), beforeHookOn: z.string().optional(),
+    afterWasmHex: z.string().optional(), afterWasmBase64: z.string().optional(), afterHookOn: z.string().optional(),
+  },
+}, async ({ beforeWasmHex, beforeWasmBase64, beforeHookOn, afterWasmHex, afterWasmBase64, afterHookOn }) => {
+  try {
+    const a = decodeCreateCode({ wasmHex: beforeWasmHex, wasmBase64: beforeWasmBase64 });
+    const b = decodeCreateCode({ wasmHex: afterWasmHex, wasmBase64: afterWasmBase64 });
+    if (!a.valid || !b.valid) return fail("both before/after WASM must be valid", { beforeValid: a.valid, afterValid: b.valid });
+    const d = diffHooks(a, b, beforeHookOn, afterHookOn);
+    return ok(d.summary, d as unknown as Record<string, unknown>);
   } catch (e) { return fail((e as Error).message); }
 });
 
