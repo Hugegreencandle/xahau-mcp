@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTime } from "../src/util.js";
+import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTime, decodeAmount, describeTx } from "../src/util.js";
 
 const ACC = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh";
 
@@ -50,5 +50,36 @@ describe("ripple_time", () => {
   it("round-trips iso -> ripple -> iso", () => {
     const t = rippleTime({ iso: "2024-01-01T00:00:00.000Z" });
     expect(rippleTime({ ripple: t.rippleTime }).iso).toBe("2024-01-01T00:00:00.000Z");
+  });
+});
+
+describe("decode_amount", () => {
+  it("native drops string", () => {
+    const d = decodeAmount("1000000") as any;
+    expect(d.type).toBe("native"); expect(d.xah).toBe("1");
+  });
+  it("native 8-byte STAmount hex (top bits are flags)", () => {
+    const d = decodeAmount("40000000000F4240") as any;
+    expect(d.type).toBe("native"); expect(d.drops).toBe("1000000");
+  });
+  it("issued amount object normalizes + decodes currency", () => {
+    const d = decodeAmount({ currency: "USD", issuer: "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh", value: "10" }) as any;
+    expect(d.type).toBe("issued"); expect(d.currency).toBe("USD"); expect(d.value).toBe("10");
+  });
+});
+
+describe("describeTx (sign-request safety)", () => {
+  it("warns on SetHook", () => {
+    const { summary, warnings } = describeTx({ TransactionType: "SetHook", Account: "rABC", LastLedgerSequence: 1 });
+    expect(summary).toMatch(/Hook/);
+    expect(warnings.join(" ")).toMatch(/on-ledger code/);
+  });
+  it("warns on AccountDelete (irreversible)", () => {
+    const { warnings } = describeTx({ TransactionType: "AccountDelete", Account: "rABC", Destination: "rXYZ", LastLedgerSequence: 1 });
+    expect(warnings.join(" ")).toMatch(/IRREVERSIBLE/);
+  });
+  it("flags a missing LastLedgerSequence", () => {
+    const { warnings } = describeTx({ TransactionType: "Payment", Account: "rABC", Destination: "rXYZ", Amount: "1000000" });
+    expect(warnings.join(" ")).toMatch(/never expires|LastLedgerSequence/);
   });
 });

@@ -11,7 +11,7 @@ import { DEFS_AVAILABLE, HOOKAPI_AVAILABLE, allTxTypes, decodeResult, GOVERNANCE
 import * as rpc from "./rpc.js";
 import { decodeHookOn, encodeHookOn } from "./hookon.js";
 import { xahAmount, decodeTxBlob, encodeTxBlob, decodeSetHook, decodeUriTokenId } from "./codec.js";
-import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTime } from "./util.js";
+import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTime, decodeAmount, describeTx } from "./util.js";
 import { readWasm, hexToBytes, base64ToBytes } from "./wasm.js";
 import { lookupHookApi, hookApiCount, HOOK_FUNCTIONS } from "./hookapi.js";
 import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyzer.js";
@@ -34,7 +34,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "0.8.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "0.9.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -171,6 +171,21 @@ server.registerTool("get_account_offers", {
   catch (e) { return fail((e as Error).message); }
 });
 
+server.registerTool("get_account_uritokens", {
+  description: "URITokens (Xahau-native NFTs) owned by an account, with each token's URI decoded from hex to text. Read-only.",
+  inputSchema: { address: z.string().min(25), network: NET },
+}, async ({ address, network }) => {
+  try {
+    const r = await rpc.getAccountObjects(address, network as Net, "uri_token");
+    const tokens = r.account_objects.map((o: any) => ({
+      uriTokenId: o.index, issuer: o.Issuer, owner: o.Owner ?? address, digest: o.Digest ?? null, flags: o.Flags ?? 0,
+      uriHex: o.URI ?? null, uri: o.URI ? Buffer.from(o.URI, "hex").toString("utf-8") : null,
+      amount: o.Amount ?? null, destination: o.Destination ?? null,
+    }));
+    return ok(`${address}: ${tokens.length} URIToken(s)`, { address, tokens });
+  } catch (e) { return fail((e as Error).message); }
+});
+
 /* ===================== Tier B — Codec / decode (offline) ===================== */
 
 server.registerTool("decode_hook_on", {
@@ -247,6 +262,27 @@ server.registerTool("ripple_time", {
   description: "Convert between Ripple time (seconds since 2000-01-01), Unix time, and ISO 8601. Xahau tx/ledger timestamps use Ripple time. Offline.",
   inputSchema: { ripple: z.number().optional(), unix: z.number().optional(), iso: z.string().optional() },
 }, async ({ ripple, unix, iso }) => { try { const t = rippleTime({ ripple, unix, iso }); return ok(`ripple ${t.rippleTime} = ${t.iso}`, t); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("decode_amount", {
+  description: "Decode an amount: native drops (digits), a serialized 8-byte native or 48-byte issued STAmount (hex), or an issued amount object {currency,issuer,value} → normalized value/currency/issuer. Offline.",
+  inputSchema: { amount: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("drops string, STAmount hex, or amount object") },
+}, async ({ amount }) => {
+  try { const d = decodeAmount(amount as any); return ok(d.type === "native" ? `${(d as any).xah} XAH (${(d as any).drops} drops)` : `${(d as any).value} ${(d as any).currency}${(d as any).issuer ? ` / ${(d as any).issuer}` : ""}`, d); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("decode_sign_request", {
+  description: "Decode a sign request (a Xaman/Xumm payload's txjson, or a raw tx_blob hex) into the transaction plus a plain-English 'what you would be authorizing' summary and safety warnings (SetHook, AccountDelete, key changes, no-expiry, already-signed). Offline — understand before you sign.",
+  inputSchema: { txjson: z.record(z.string(), z.unknown()).optional(), txBlobHex: z.string().optional() },
+}, async ({ txjson, txBlobHex }) => {
+  try {
+    const tx = (txjson as Record<string, any> | undefined) ?? (txBlobHex ? (decodeTxBlob(txBlobHex) as Record<string, any>) : undefined);
+    if (!tx) return fail("provide txjson or txBlobHex");
+    const { summary, warnings } = describeTx(tx);
+    const amountDecoded = tx.Amount !== undefined ? decodeAmount(tx.Amount) : null;
+    return ok(`${summary}${warnings.length ? " ⚠ " + warnings.length + " warning(s)" : ""}`, { transactionType: tx.TransactionType, summary, warnings, amountDecoded, tx });
+  } catch (e) { return fail((e as Error).message); }
+});
 
 /* ===================== Tier C — Hook intelligence (the moat, offline) ===================== */
 

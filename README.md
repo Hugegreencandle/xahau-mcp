@@ -48,6 +48,8 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | `decode_uritoken_id` · `xah_amount` | URIToken ID validation · XAH⇄drops. |
 | `validate_address` · `xaddress` | Validate classic/X-address (type, account-id, tag) · encode/decode X-addresses. |
 | `currency_code` · `ripple_time` | 3-char ISO ⇄ 160-bit currency · Ripple-time ⇄ Unix/ISO. |
+| `decode_amount` | Decode native drops / 8-byte / 48-byte issued STAmount / amount object → value+currency+issuer. |
+| `decode_sign_request` | Decode a Xaman txjson or tx_blob → plain-English "what you authorize" + safety warnings. |
 
 **Ledger (read-only RPC)**
 | Tool | Purpose |
@@ -55,7 +57,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | `xahau_server_info` · `get_account_info` · `get_account_objects` | Node/account reads. |
 | `get_account_hooks` · `get_hook_definition` · `get_hook_state` | Hook reads. |
 | `get_transaction` · `get_ledger` · `get_fee` | Tx (with `HookExecutions`) · ledger · current network fee. |
-| `get_account_lines` · `get_account_offers` | Trustlines · open DEX offers. |
+| `get_account_lines` · `get_account_offers` · `get_account_uritokens` | Trustlines · DEX offers · URITokens (NFTs, URI decoded). |
 
 **Economics / governance**
 | Tool | Purpose |
