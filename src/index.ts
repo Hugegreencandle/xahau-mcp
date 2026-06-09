@@ -23,6 +23,13 @@ import { computeReward } from "./rewards.js";
 import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned } from "./builders.js";
+import { fidelityReport, type HookCorpus } from "./fidelity.js";
+import { readFileSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CORPUS_PATH = join(__dirname, "..", "data", "hook-corpus.json");
 
 const NET = z.enum(["mainnet", "testnet"]).default("mainnet");
 type Net = "mainnet" | "testnet";
@@ -624,6 +631,30 @@ server.registerTool("prepare_transaction", {
       autofilled: { sequence: t.Sequence, fee: t.Fee, lastLedgerSequence: t.LastLedgerSequence, networkId: t.NetworkID },
       signingInstructions: "Now SIGN this OFFLINE with your own key (xaman / xrpl-accountlib) and submit. This tool only filled in network values — it never signs or submits. NEVER paste a secret here.",
     });
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("vm_fidelity_report", {
+  description: "HONEST FIDELITY METRIC: measures how faithfully the local Hook VM reproduces what REALLY happened on Xahau mainnet. Loads a committed corpus (data/hook-corpus.json) of real validated transactions whose metadata carried HookExecutions, runs each hook's real bytecode through the local VM, and compares the VM's accept/rollback DIRECTION to the on-chain HookResult. The agreement % is computed ONLY over COMPARABLE (non-degraded, scoreable) runs; degraded/halted/indeterminate runs are reported separately and EXCLUDED — never counted as a match. Strictly offline; reads no network. If the corpus is empty/tiny it says 'insufficient corpus' rather than print an unsupported number.",
+  inputSchema: { includeMismatches: z.boolean().default(true).describe("include the per-mismatch list (txHash/vmExit/onChainResult)") },
+}, async ({ includeMismatches }) => {
+  try {
+    if (!existsSync(CORPUS_PATH)) return fail(`corpus not found at ${CORPUS_PATH}; run the corpus builder first.`);
+    const corpus = JSON.parse(readFileSync(CORPUS_PATH, "utf-8")) as HookCorpus;
+    const rep = fidelityReport(corpus);
+    const out: Record<string, unknown> = {
+      total: rep.total,
+      comparable: rep.comparable,
+      agreements: rep.agreements,
+      agreementPct: rep.agreementPct,
+      degradedCount: rep.degradedCount,
+      insufficient: rep.insufficient,
+      perHook: rep.perHook,
+      corpus: rep.corpus,
+      headline: rep.headline,
+    };
+    if (includeMismatches) out.mismatches = rep.mismatches;
+    return ok(rep.headline, out);
   } catch (e) { return fail((e as Error).message); }
 });
 
