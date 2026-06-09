@@ -2,17 +2,17 @@
 // a serialized keylet is [spaceKey_uint16_BE][32-byte index] (34 bytes).
 //
 // VERIFIED against the live mainnet ledger (computed index == real ledger object index):
-//   ACCOUNT (space 0x61 'a')  and  HOOK (space 0x48 'H')  — both account-only.
-// The sequence-based types below use the canonical rippled LedgerNameSpace chars + the standard
-// (account, sequence) field order. They are NOT round-trip-verified in-repo, but they FAIL SAFE:
-// a wrong derivation yields a non-existent index, so slot_set simply can't resolve it (the run is
-// marked `degraded`) — it never produces a wrong, confident result.
+//   ACCOUNT (0x61 'a'), HOOK (0x48 'H'), OFFER (0x6F 'o', account+u32 seq),
+//   LINE/RippleState (0x72 'r', sorted lowAccID+highAccID+currency160).
+// The other sequence-based types (escrow/check/ticket) use the canonical rippled LedgerNameSpace
+// chars + (account, sequence) order; not round-trip-verified in-repo, but they FAIL SAFE — a wrong
+// derivation yields a non-existent index, so slot_set just can't resolve it (run marked `degraded`).
 import { createHash } from "node:crypto";
 
 export const KEYLET_SPACE: Record<string, number> = {
-  ACCOUNT: 0x61, HOOK: 0x48, OFFER: 0x6f, ESCROW: 0x75, CHECK: 0x43, TICKET: 0x54, SIGNERS: 0x53,
+  ACCOUNT: 0x61, HOOK: 0x48, OFFER: 0x6f, LINE: 0x72, ESCROW: 0x75, CHECK: 0x43, TICKET: 0x54, SIGNERS: 0x53,
 };
-export const VERIFIED_SPACES = new Set([0x61, 0x48]); // round-trip-verified vs live ledger
+export const VERIFIED_SPACES = new Set([0x61, 0x48, 0x6f, 0x72]); // round-trip-verified vs live ledger
 
 export function keyletIndex(spaceKey: number, fields: Uint8Array): Uint8Array {
   const buf = new Uint8Array(2 + fields.length);
@@ -40,9 +40,16 @@ export function accountKeylet(accountId: Uint8Array): Uint8Array { return serial
 export function hookKeylet(accountId: Uint8Array): Uint8Array { return serialize(KEYLET_SPACE.HOOK, accountId); }
 /** 34-byte serialized signer-list keylet (canonical; signerListID 0). */
 export function signersKeylet(accountId: Uint8Array): Uint8Array { return serialize(KEYLET_SPACE.SIGNERS, cat(accountId, u32be(0))); }
-/** account+sequence keylet (offer/escrow/check/ticket) — canonical namespace + (account, seq) order. */
+/** account+sequence keylet (offer/escrow/check/ticket) — (account, seq) order. OFFER is VERIFIED. */
 export function accountSeqKeylet(space: number, accountId: Uint8Array, seq: number): Uint8Array {
   return serialize(space, cat(accountId, u32be(seq)));
+}
+/** offer keylet (VERIFIED): SHA512-Half(0x006F || owner || u32be(sequence)). */
+export function offerKeylet(owner: Uint8Array, seq: number): Uint8Array { return accountSeqKeylet(KEYLET_SPACE.OFFER, owner, seq); }
+/** trustline (RippleState) keylet (VERIFIED): low+high accounts sorted, then the 160-bit currency. */
+export function lineKeylet(a: Uint8Array, b: Uint8Array, currency160: Uint8Array): Uint8Array {
+  const [lo, hi] = Buffer.compare(Buffer.from(a), Buffer.from(b)) <= 0 ? [a, b] : [b, a];
+  return serialize(KEYLET_SPACE.LINE, cat(lo, hi, currency160));
 }
 
 /** Extract the 32-byte index (hex, upper) from a keylet that may be 34 bytes ([type][index]) or 32. */
