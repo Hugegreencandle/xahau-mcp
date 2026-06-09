@@ -62,6 +62,84 @@ function parseHeader(b: Uint8Array, p: number): { typeCode: number; fieldCode: n
   return { typeCode, fieldCode, next: q };
 }
 
+export interface FullField { code: number; typeCode: number; fieldCode: number; start: number; end: number; }
+
+/** Walk every top-level field, returning its FULL byte range (header + value). null if unparseable. */
+export function stoFields(blob: Uint8Array): FullField[] | null {
+  const out: FullField[] = [];
+  let p = 0;
+  for (let guard = 0; guard < 100000 && p < blob.length; guard++) {
+    const start = p;
+    const hdr = parseHeader(blob, p);
+    if (!hdr) return null;
+    const vl = valueLength(blob, hdr.next, hdr.typeCode);
+    if (!vl) return null;
+    const end = hdr.next + vl.vlHeader + vl.len;
+    out.push({ code: (hdr.typeCode << 16) | hdr.fieldCode, typeCode: hdr.typeCode, fieldCode: hdr.fieldCode, start, end });
+    p = end;
+  }
+  return out;
+}
+
+/** sto_emplace: return `blob` with `fieldBytes` (a complete serialized field, header+value) inserted/
+ *  replaced at its canonical position. Returns null if the source or field bytes can't be parsed. */
+export function stoEmplace(blob: Uint8Array, fieldBytes: Uint8Array): Uint8Array | null {
+  const fields = stoFields(blob);
+  const fhdr = parseHeader(fieldBytes, 0);
+  if (!fields || !fhdr) return null;
+  const newCode = (fhdr.typeCode << 16) | fhdr.fieldCode;
+  const kept = fields.filter((f) => f.code !== newCode);
+  // canonical order: ascending sfield code (type, then field)
+  const segs: Uint8Array[] = [];
+  let inserted = false;
+  for (const f of kept) {
+    if (!inserted && newCode < f.code) { segs.push(fieldBytes); inserted = true; }
+    segs.push(blob.slice(f.start, f.end));
+  }
+  if (!inserted) segs.push(fieldBytes);
+  return concat(segs);
+}
+
+/** sto_erase: return `blob` with the field of `sfieldCode` removed. null if unparseable or absent. */
+export function stoErase(blob: Uint8Array, sfieldCode: number): Uint8Array | null {
+  const fields = stoFields(blob);
+  if (!fields) return null;
+  if (!fields.some((f) => f.code === sfieldCode)) return null;
+  return concat(fields.filter((f) => f.code !== sfieldCode).map((f) => blob.slice(f.start, f.end)));
+}
+
+/** Encode a field header from a type/field code (inverse of parseHeader). */
+export function encodeFieldHeader(typeCode: number, fieldCode: number): number[] {
+  const out: number[] = [(typeCode < 16 ? typeCode : 0) << 4 | (fieldCode < 16 ? fieldCode : 0)];
+  if (typeCode >= 16) out.push(typeCode);
+  if (fieldCode >= 16) out.push(fieldCode);
+  return out;
+}
+
+/** Encode a variable-length prefix (inverse of readVL). */
+export function encodeVL(len: number): number[] {
+  if (len <= 192) return [len];
+  if (len <= 12480) { const x = len - 193; return [193 + (x >> 8), x & 0xff]; }
+  const x = len - 12481;
+  return [241 + (x >> 16), (x >> 8) & 0xff, x & 0xff];
+}
+
+/** Build a complete serialized field (header [+ VL prefix] + value) for an sfield code. */
+export function buildField(sfieldCode: number, value: Uint8Array): Uint8Array {
+  const t = (sfieldCode >> 16) & 0xffff, f = sfieldCode & 0xffff;
+  const hdr = encodeFieldHeader(t, f);
+  const vl = (t === 7 || t === 8 || t === 19) ? encodeVL(value.length) : [];
+  return new Uint8Array([...hdr, ...vl, ...value]);
+}
+
+function concat(parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((n, p) => n + p.length, 0);
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
 /** Find the value byte-range of the field with the given sfield code ((type<<16)|field). */
 export function stoFieldRange(blob: Uint8Array, sfieldCode: number): FieldRange | null {
   const wantType = (sfieldCode >> 16) & 0xffff;

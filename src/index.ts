@@ -17,6 +17,7 @@ import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyze
 import { runHook } from "./sandbox.js";
 import { fuzzHook } from "./fuzz.js";
 import { computeReward } from "./rewards.js";
+import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned } from "./builders.js";
 
@@ -390,6 +391,14 @@ server.registerTool("compute_reward", {
     const res = computeReward({ balanceXAH: bal, rewardAccumulator: acc, rewardLgrFirst: first, currentLedger: cur });
     return ok(`${res.eligibleToClaim ? "claimable" : "not yet eligible"}: ~${res.claimableXAH} XAH (${res.fidelity})`, res);
   } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("quantum_grade", {
+  description: "Grade a Xahau account for quantum (HNDL) readiness: master-key-disabled, regular key, multi-sign and installed hooks → 0-100 score + tier + recommendations. Ports the xrpl-audit quantum model to Xahau, with a Hook/PQC dimension. Read-only.",
+  inputSchema: { address: z.string().min(25).describe("r-address"), network: NET },
+}, async ({ address, network }) => {
+  try { const g = await quantumGrade(address, network as Net); return ok(`${address}: ${g.tier} (${g.score}/100) — ${g.masterDisabled ? "master disabled" : "master ENABLED"}`, g); }
+  catch (e) { return fail((e as Error).message); }
 });
 
 server.registerTool("governance_state", {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stoFieldRange } from "../src/sto.js";
+import { stoFieldRange, stoErase, stoEmplace, stoFields, buildField } from "../src/sto.js";
 import { encodeTxBlob } from "../src/codec.js";
 
 const hexToBytes = (h: string) => new Uint8Array(Buffer.from(h, "hex"));
@@ -40,5 +40,26 @@ describe("STObject field walker", () => {
 
   it("returns null for an absent field", () => {
     expect(stoFieldRange(blob, (5 << 16) | 99)).toBeNull();
+  });
+
+  it("sto_erase removes a field and the rest still parses", () => {
+    const out = stoErase(blob, sfAmount);
+    expect(out).not.toBeNull();
+    expect(stoFieldRange(out!, sfAmount)).toBeNull(); // Amount gone
+    expect(stoFieldRange(out!, sfAccount)).not.toBeNull(); // Account remains
+    expect(stoFields(out!)).not.toBeNull(); // still a valid STObject
+  });
+
+  it("sto_emplace inserts a field in canonical order and it round-trips", () => {
+    const erased = stoErase(blob, sfAmount)!;
+    const newAmount = buildField(sfAmount, hexToBytes("4000000000004E20")); // native 20000 drops
+    const out = stoEmplace(erased, newAmount);
+    expect(out).not.toBeNull();
+    const r = stoFieldRange(out!, sfAmount);
+    expect(r).not.toBeNull();
+    expect(r!.len).toBe(8);
+    // fields remain in ascending sfield-code order
+    const codes = stoFields(out!)!.map((f) => f.code);
+    expect(codes).toEqual([...codes].sort((a, b) => a - b));
   });
 });
