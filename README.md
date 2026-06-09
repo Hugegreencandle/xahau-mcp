@@ -62,7 +62,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | Tool | Purpose |
 |---|---|
 | `build_sethook_unsigned` | UNSIGNED SetHook with automatic `analyze_hook` preflight. |
-| `build_claimreward_unsigned` · `build_payment_unsigned` | UNSIGNED ClaimReward · Payment. |
+| `build_claimreward_unsigned` · `build_import_unsigned` · `build_payment_unsigned` | UNSIGNED ClaimReward · Import/B2M (wraps a HEX XPOP) · Payment. |
 
 ## Install
 

@@ -73,6 +73,17 @@ export function buildSetHookUnsigned(input: {
   };
 }
 
+export function buildImportUnsigned(input: { account: string; xpopBlobHex: string; network?: Network }): BuildResult {
+  const network = input.network ?? "testnet";
+  const blob = input.xpopBlobHex.trim().replace(/^0x/i, "").toUpperCase();
+  if (!/^[0-9A-F]+$/.test(blob) || blob.length % 2 !== 0) throw new Error("xpopBlobHex must be the HEX-encoded XPOP (even-length hex)");
+  return {
+    unsignedTx: { TransactionType: "Import", ...base(input.account, network), Blob: blob },
+    network,
+    signingInstructions: SIGNING_INSTRUCTIONS + " For Import (Burn2Mint), the XPOP proves a validated burn on the source chain; the destination account need not yet exist on Xahau.",
+  };
+}
+
 export function buildClaimRewardUnsigned(input: { account: string; issuer?: string; network?: Network }): BuildResult {
   const network = input.network ?? "testnet";
   const tx: Record<string, unknown> = { TransactionType: "ClaimReward", ...base(input.account, network) };

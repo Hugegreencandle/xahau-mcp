@@ -19,7 +19,7 @@ import { fuzzHook } from "./fuzz.js";
 import { computeReward } from "./rewards.js";
 import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
-import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned } from "./builders.js";
+import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned } from "./builders.js";
 
 const NET = z.enum(["mainnet", "testnet"]).default("mainnet");
 type Net = "mainnet" | "testnet";
@@ -31,7 +31,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "0.4.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "0.5.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -450,6 +450,11 @@ server.registerTool("build_claimreward_unsigned", {
   description: "Assemble an UNSIGNED ClaimReward transaction. Returns unsigned JSON + offline signing instructions. Never signs; testnet by default.",
   inputSchema: { account: z.string().min(25), issuer: z.string().optional(), network: NET.default("testnet") },
 }, async (a) => { try { const r = buildClaimRewardUnsigned(a as any); return ok(`unsigned ClaimReward for ${a.account} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("build_import_unsigned", {
+  description: "Assemble an UNSIGNED Import (Burn2Mint) transaction wrapping a HEX-encoded XPOP in the Blob field. Returns unsigned JSON + offline signing instructions. Never signs; testnet by default.",
+  inputSchema: { account: z.string().min(25), xpopBlobHex: z.string().min(2).describe("HEX-encoded XPOP proof"), network: NET.default("testnet") },
+}, async (a) => { try { const r = buildImportUnsigned(a as any); return ok(`unsigned Import for ${a.account} (${r.network}, ${a.xpopBlobHex.length / 2}B xpop)`, r as any); } catch (e) { return fail((e as Error).message); } });
 
 server.registerTool("build_payment_unsigned", {
   description: "Assemble an UNSIGNED XAH Payment (amount in drops). Returns unsigned JSON + offline signing instructions + payload preflight. Never signs; testnet by default.",
