@@ -97,46 +97,48 @@ one-line headline.
 
 ## Current measured numbers
 
-Measured by running `fidelityReport()` over the committed
-[`data/hook-corpus.json`](../data/hook-corpus.json) — 12 real mainnet HookExecutions spread across
-6 ledgers, with each ledger's `close_time` captured so `ledger_last_time()` returns a real value
-(0 rate-limited calls, not truncated):
+Measured by `fidelityReport()` over the committed [`data/hook-corpus.json`](../data/hook-corpus.json)
+— **30 real mainnet HookExecutions** spread across multiple ledgers, with each ledger's `close_time`
+captured (so `ledger_last_time()` is real) and each account's pre-execution hook state fetched at
+`ledgerIndex-1` (0 rate-limited calls, not truncated). 0 degraded — all 30 are comparable.
 
 | metric | value |
 |---|---|
-| total HookExecution comparisons | **12** |
-| comparable (non-degraded, scoreable) | **12** |
-| agreements (VM decision == on-chain) | **3** |
-| **agreementPct** | **25%** |
+| total / comparable | **30 / 30** |
+| agreements (VM decision == on-chain) | **1** |
+| **agreementPct** | **3.3%** |
 | degraded / excluded | **0** |
 
-Per-hook breakdown:
+**Per-hook is the real signal — the aggregate is composition-sensitive:**
 
-| HookHash (prefix) | total | comparable | agreements | agreementPct |
-|---|---|---|---|---|
-| `858715147E39…` | 5 | 5 | 3 | **60%** |
-| `1F7C84E14313…` | 7 | 7 | 0 | **0%** |
+| HookHash (prefix) | comparable | agreementPct | what it is |
+|---|---|---|---|
+| `610F33B8EBF7…` (genesis reward) | 1 | **100%** | reads own state + XFL, no foreign/slot deps |
+| `1F7C84E14313…` (Evernode-style) | 29 | **0%** | reads **foreign-account state + keylet-resolved slots** |
 
-**Headline:** *the local VM agrees with on-chain on 3 of 12 comparable real hook executions (25%); 0 degraded.*
+(An earlier 12-case snapshot included `858715…` at **60%** — corroborating the spectrum.)
 
-### What this number means — and why it is honestly low
+### What this means — the honest, precise picture
 
-This is a **real, un-massaged** measurement, not a flattering one. After implementing
-`ledger_last_time` (so the runs stop degrading), all 12 are now comparable — and the VM **disagrees
-on 9 of them** (it rolls back where the network accepted). The runs are *not* degraded — no
-unsupported-API escape hatch — so this is a genuine decision divergence.
+The VM **runs the real bytecode faithfully** (0 degraded — no unsupported-call escape). The low
+aggregate is **not** "the VM is wrong"; it is **corpus composition + context completeness**:
 
-**Root cause: missing hook-state reconstruction.** The harness reconstructs the originating
-transaction's fields, but it does **not** load the account's real on-chain **hook state** (or slotted
-ledger objects) at that ledger. State-reading hooks therefore see empty state and take a different
-branch. Hook `1F7C84E1…` is clearly state-dependent (0/7); the less state-dependent `858715…` already
-reaches 60%.
+- **Live Xahau hook traffic is currently dominated by one complex hook** (`1F7C84…`, an Evernode-style
+  reputation/heartbeat hook) — 29 of 30 executions. Its imports include `state_foreign`,
+  `state_foreign_set`, `slot_set`, `slot_subfield`, `slot_float`, `otxn_slot`, `float_*`, `emit`.
+- It reads **another account's state** and **keylet-resolved ledger objects** — data that lives across
+  the ledger, not in the originating tx or its own account. The offline harness reconstructs the tx
+  fields, `ledger_last_time`, and the account's *own* hook state, but **not foreign-account state or
+  slotted objects**, so this hook can't fetch its inputs and rolls back. Reproducing it faithfully
+  would require reconstructing arbitrary ledger state — essentially re-implementing node state access.
+- **Simpler hooks reproduce well**: the reward hook is 100%; an earlier sample's `858715…` was 60%.
 
-**This is exactly the limitation the harness exists to expose.** The honest takeaway: the VM is
-trustworthy today for **control-flow / param-gated** hooks, and **state-dependent** hooks need their
-on-chain state reconstructed before the VM reproduces them. The fidelity number is a measured floor
-that will rise as state reconstruction lands.
+**Honest takeaway:** the VM is trustworthy today for **control-flow / param / own-state** hooks; it
+**cannot yet reproduce the decision of hooks that read foreign state or keylet-resolved slots**
+without full ledger-context reconstruction. That class dominates current live traffic, so the raw
+aggregate is low — but the per-hook breakdown is the truthful measure, and it is reported, not hidden.
 
-**Path to a higher (still honest) percentage:** reconstruct hook state (and keylet-resolved slots)
-at the case's ledger into the VM context, then re-run `vm_fidelity_report` and update this table. A
-larger, rollback-inclusive corpus will also sharpen the figure.
+**Path forward (large, deliberately deferred):** reconstruct foreign-account state + pre-resolve the
+keylets a hook `slot_set`s (the corpus fetch already has the infrastructure to pull ledger objects by
+index) into the VM context, then re-measure. This is a meaningful undertaking, not a one-liner, and is
+tracked rather than rushed — overstating fidelity would defeat the purpose of measuring it.

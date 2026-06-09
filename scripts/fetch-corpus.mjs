@@ -139,6 +139,20 @@ async function main() {
 
   console.error(`[corpus] collected ${cases.length} cases from ${ledgersWalked} ledgers walked`);
 
+  // 2b. for each case, fetch the hook account's REAL hook state at the ledger BEFORE the case
+  // (pre-execution state — the node is full-history so this is accurate, not current/approximate).
+  for (const c of cases) {
+    if (!c.hookAccount) { c.hookState = {}; continue; }
+    const st = await rpc("account_objects", { account: c.hookAccount, type: "hook_state", ledger_index: c.ledgerIndex - 1 });
+    const state = {};
+    for (const o of st?.account_objects ?? []) {
+      const k = o.HookStateKey, v = o.HookStateData;
+      if (typeof k === "string" && typeof v === "string") state[k.toUpperCase()] = v.toUpperCase();
+    }
+    c.hookState = state;
+  }
+  console.error(`[corpus] fetched pre-execution hook state for ${cases.length} cases`);
+
   // 3. fetch each distinct HookHash's CreateCode (dedup; many cases share a hook)
   const distinctHashes = new Set();
   for (const c of cases) for (const he of c.hookExecutions) if (he.HookHash) distinctHashes.add(he.HookHash);
