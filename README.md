@@ -18,7 +18,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 
 - **Read-only** toward the network. There is no `submit` and no `sign` anywhere in this server.
 - **No key custody.** Builder tools never accept a secret/seed and always return an **unsigned** transaction plus instructions to sign offline (e.g. with [xaman](https://xaman.app) or `xrpl-accountlib`). They default to **testnet**.
-- **Honest fidelity.** `execute_hook` runs the **real bytecode** against a **simulated environment**. The VM implements a large slice of the 78-function Hook API — the full **XFL float** API (verified against `float_one`), the **slot** table + **STObject subfield extraction** (`slot_subfield`/`sto_subfield`, byte-exact against real txns), state, `otxn_*`/`hook_*`, `util_accid`/`util_raddr`/`util_verify`/`util_sha512h`, and more. What it cannot do faithfully is honestly recorded: anything needing live-ledger resolution (`util_keylet`/`slot_set` against the chain — impossible in a synchronous VM), `meta_slot`, and STObject mutation (`sto_emplace`/`erase`) return the real `NOT_IMPLEMENTED` code and are listed in `unsupportedCalls`, marking the run `degraded` — **never faked**. It is **not** a consensus-faithful `xahaud` replica; always confirm on testnet. `hook_dry_run` is `STATIC_ONLY`, `compute_reward` is `DOCUMENTED_MODEL`, `estimate_hook_fee` is `ESTIMATE`.
+- **Honest fidelity.** `execute_hook` runs the **real bytecode** against a **simulated environment**. The VM implements a large slice of the 78-function Hook API — the full **XFL float** API (verified against `float_one`), the **slot** table + **STObject subfield extraction** (`slot_subfield`/`sto_subfield`, byte-exact against real txns), state, `otxn_*`/`hook_*`, `util_accid`/`util_raddr`/`util_verify`/`util_sha512h`, and more. STObject mutation (`sto_emplace`/`erase`/`validate`), `util_keylet` (account, verified against the live ledger index), and **`slot_set` with async pre-resolve** (`execute_hook resolveKeylets:true` fetches the ledger objects the hook reads and re-runs) are now supported. What still can't be faithful is honestly recorded: unverified keylet subtypes, `meta_slot`, and other un-modelled calls return the real `NOT_IMPLEMENTED` code, are listed in `unsupportedCalls`, and mark the run `degraded` — **never faked**. It is **not** a consensus-faithful `xahaud` replica; always confirm on testnet. `hook_dry_run` is `STATIC_ONLY`, `compute_reward` is `DOCUMENTED_MODEL`, `estimate_hook_fee` is `ESTIMATE`.
 
 - **Resources & prompts.** Beyond tools, the server exposes MCP **resources** (`xahau://rules`, `xahau://hook-api`, `xahau://tx-types`) and guided **prompts** (`audit_hook`, `simulate_hook`, `explain_hook`) so agents can pull reference data and run the common workflows directly.
 
@@ -55,6 +55,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | Tool | Purpose |
 |---|---|
 | `compute_reward` | Project claimable XAH network reward (`DOCUMENTED_MODEL`). |
+| `quantum_grade` | Grade an account for quantum (HNDL) readiness — master-key/regular-key/multisig + hooks → score, tier, recommendations (with a Hook/PQC angle). |
 | `governance_state` · `decode_b2m` | Genesis governance constants + live read · Burn2Mint classification. |
 
 **Unsigned builders (no keys, testnet-default)**

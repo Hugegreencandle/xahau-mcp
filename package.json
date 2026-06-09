@@ -1,6 +1,6 @@
 {
   "name": "xahau-mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Model Context Protocol server for the Xahau network — the first MCP with offline Hook intelligence: WASM inspection + a Hooks-specific static-analysis/security rule engine, plus read-only ledger, codec, governance and unsigned-tx tooling.",
   "type": "module",
   "license": "MIT",

@@ -31,7 +31,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "0.3.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "0.4.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -294,15 +294,33 @@ server.registerTool("execute_hook", {
     hookAccountId: z.string().optional().describe("20-byte account-id hex the hook is installed on"),
     hookParams: z.record(z.string(), z.string()).optional(),
     state: z.record(z.string(), z.string()).optional().describe("initial hook state: 32-byte key hex -> value hex"),
+    keyletBlobs: z.record(z.string(), z.string()).optional().describe("32-byte ledger index hex -> serialized object hex, for slot_set"),
+    otxnBlob: z.string().optional().describe("full originating-txn serialized blob hex (enables otxn_slot)"),
     ledgerSeq: z.number().optional(), feeBase: z.number().optional(),
+    resolveKeylets: z.boolean().optional().describe("if true, fetch any slot_set'd ledger objects live and re-run (async pre-resolve)"),
+    network: NET,
   },
-}, async ({ wasmHex, wasmBase64, txType, otxnFields, otxnParams, hookAccountId, hookParams, state, ledgerSeq, feeBase }) => {
+}, async ({ wasmHex, wasmBase64, txType, otxnFields, otxnParams, hookAccountId, hookParams, state, keyletBlobs, otxnBlob, ledgerSeq, feeBase, resolveKeylets, network }) => {
   try {
     const bytes = wasmHex ? hexToBytes(wasmHex) : wasmBase64 ? base64ToBytes(wasmBase64) : null;
     if (!bytes) return fail("provide wasmHex or wasmBase64");
-    const r = runHook(bytes, { txType, otxnFields, otxnParams, hookAccountId, hookParams, state, ledgerSeq, feeBase });
+    const baseCtx = { txType, otxnFields, otxnParams, hookAccountId, hookParams, state, keyletBlobs, otxnBlob, ledgerSeq, feeBase };
+    let r = runHook(bytes, baseCtx);
+    let resolved: string[] = [];
+    // async pre-resolve: fetch the ledger objects the hook tried to slot_set, then re-run once
+    if (resolveKeylets && r.wantedKeylets.length) {
+      const fetched: Record<string, string> = { ...(keyletBlobs ?? {}) };
+      for (const idx of r.wantedKeylets) {
+        try {
+          const le = await rpc.getLedgerEntry({ index: idx, binary: true }, network as Net) as any;
+          const binHex = le.node_binary ?? le.node?.node_binary;
+          if (binHex) { fetched[idx] = binHex; resolved.push(idx); }
+        } catch { /* leave unresolved */ }
+      }
+      if (resolved.length) r = runHook(bytes, { ...baseCtx, keyletBlobs: fetched });
+    }
     const tail = r.degraded ? " ⚠ DEGRADED" : "";
-    return ok(`${r.exit.toUpperCase()}${r.returnCode !== null ? ` code=${r.returnCode}` : ""}${r.returnString ? ` "${r.returnString}"` : ""} · ${r.stateWrites.length} state write(s) · ${r.emitted.length} emit(s)${tail}`, r as unknown as Record<string, unknown>);
+    return ok(`${r.exit.toUpperCase()}${r.returnCode !== null ? ` code=${r.returnCode}` : ""}${r.returnString ? ` "${r.returnString}"` : ""} · ${r.stateWrites.length} state write(s) · ${r.emitted.length} emit(s)${resolved.length ? ` · resolved ${resolved.length} keylet(s)` : ""}${tail}`, { ...(r as unknown as Record<string, unknown>), resolvedKeylets: resolved });
   } catch (e) { return fail((e as Error).message); }
 });
 
