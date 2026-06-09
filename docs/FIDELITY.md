@@ -98,39 +98,45 @@ one-line headline.
 ## Current measured numbers
 
 Measured by running `fidelityReport()` over the committed
-[`data/hook-corpus.json`](../data/hook-corpus.json) (captured `2026-06-09T22:08:48Z`,
-1 ledger walked, 0 rate-limited calls, not truncated):
+[`data/hook-corpus.json`](../data/hook-corpus.json) — 12 real mainnet HookExecutions spread across
+6 ledgers, with each ledger's `close_time` captured so `ledger_last_time()` returns a real value
+(0 rate-limited calls, not truncated):
 
 | metric | value |
 |---|---|
-| total HookExecution comparisons | **25** |
-| comparable (non-degraded, scoreable) | **0** |
-| agreements | **0** |
-| **agreementPct** | **null (insufficient corpus)** |
-| degraded / excluded | **25** |
+| total HookExecution comparisons | **12** |
+| comparable (non-degraded, scoreable) | **12** |
+| agreements (VM decision == on-chain) | **3** |
+| **agreementPct** | **25%** |
+| degraded / excluded | **0** |
 
 Per-hook breakdown:
 
-| HookHash (prefix) | total | comparable | agreements | agreementPct | degraded |
-|---|---|---|---|---|---|
-| `EFBB4898CD57…` | 14 | 0 | 0 | null | 14 |
-| `B352CB9916C8…` | 9 | 0 | 0 | null | 9 |
-| `1F7C84E14313…` | 2 | 0 | 0 | null | 2 |
+| HookHash (prefix) | total | comparable | agreements | agreementPct |
+|---|---|---|---|---|
+| `858715147E39…` | 5 | 5 | 3 | **60%** |
+| `1F7C84E14313…` | 7 | 7 | 0 | **0%** |
 
-**Headline:** *insufficient corpus: 0 comparable real hook executions (of 25 total; 25
-degraded/excluded) — not enough to measure VM fidelity.*
+**Headline:** *the local VM agrees with on-chain on 3 of 12 comparable real hook executions (25%); 0 degraded.*
 
-### Why zero comparable runs — and why that is the honest answer
+### What this number means — and why it is honestly low
 
-Every one of the three distinct hooks in this corpus calls **`ledger_last_time`**, a Hook-API
-function the local VM does not yet implement. Per the rules above, each run therefore **degrades**
-and is **excluded** from the metric. Rather than invent an agreement percentage over runs whose
-outcome the VM could not determine, the harness honestly reports *insufficient corpus*.
+This is a **real, un-massaged** measurement, not a flattering one. After implementing
+`ledger_last_time` (so the runs stop degrading), all 12 are now comparable — and the VM **disagrees
+on 9 of them** (it rolls back where the network accepted). The runs are *not* degraded — no
+unsupported-API escape hatch — so this is a genuine decision divergence.
 
-This is the harness working as intended: the integrity guarantee ("never claim a fidelity number the
-data doesn't support") is more valuable than a fabricated headline number.
+**Root cause: missing hook-state reconstruction.** The harness reconstructs the originating
+transaction's fields, but it does **not** load the account's real on-chain **hook state** (or slotted
+ledger objects) at that ledger. State-reading hooks therefore see empty state and take a different
+branch. Hook `1F7C84E1…` is clearly state-dependent (0/7); the less state-dependent `858715…` already
+reaches 60%.
 
-**Path to a real percentage:** (1) implement the missing Hook-API surface — starting with
-`ledger_last_time` — so these hooks become comparable; and/or (2) extend the corpus to include hooks
-that exercise only the already-supported API subset. Either raises `comparable` above zero; re-run
-`vm_fidelity_report` and update this table.
+**This is exactly the limitation the harness exists to expose.** The honest takeaway: the VM is
+trustworthy today for **control-flow / param-gated** hooks, and **state-dependent** hooks need their
+on-chain state reconstructed before the VM reproduces them. The fidelity number is a measured floor
+that will rise as state reconstruction lands.
+
+**Path to a higher (still honest) percentage:** reconstruct hook state (and keylet-resolved slots)
+at the case's ledger into the VM context, then re-run `vm_fidelity_report` and update this table. A
+larger, rollback-inclusive corpus will also sharpen the figure.

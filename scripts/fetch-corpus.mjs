@@ -20,8 +20,9 @@ const NODE = process.env.XAHAU_RPC || "https://xahau.network";
 const PAUSE_MS = 1300;            // >=1200ms between every RPC
 const BACKOFF_MS = 5000;          // wait after a rate-limit hit
 const MAX_RETRIES = 2;            // retries per call after a rate-limit, then skip
-const MAX_LEDGERS = 60;           // cap on ledgers walked
-const MAX_CASES = 25;             // cap on corpus size
+const MAX_LEDGERS = 80;           // cap on ledgers walked
+const MAX_CASES = 30;             // cap on corpus size
+const MAX_PER_LEDGER = 3;         // spread across ledgers (diversity + rollback odds) instead of draining one
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -114,9 +115,11 @@ async function main() {
     const led = await rpc("ledger", { ledger_index: li, transactions: true, expand: true });
     ledgersWalked++;
     if (!led || !led.ledger || !Array.isArray(led.ledger.transactions)) continue;
+    const ledgerCloseTime = led.ledger.close_time ?? null; // Ripple time of this ledger's close (real value for ledger_last_time)
 
+    let perLedger = 0;
     for (const t of led.ledger.transactions) {
-      if (cases.length >= MAX_CASES) break;
+      if (cases.length >= MAX_CASES || perLedger >= MAX_PER_LEDGER) break;
       const meta = t.metaData || t.meta;
       const hookExecutions = extractHookExecutions(meta);
       if (!hookExecutions.length) continue;
@@ -124,11 +127,13 @@ async function main() {
       cases.push({
         txHash: t.hash,
         ledgerIndex: li,
+        ledgerCloseTime,
         tx: cleanTx(t),
         hookAccount: hookExecutions[0].HookAccount ?? null,
         hookExecutions: hookExecutions.map(({ HookHash, HookResult, HookReturnCode }) => ({ HookHash, HookResult, HookReturnCode })),
         engineResult: meta?.TransactionResult ?? null,
       });
+      perLedger++;
     }
   }
 

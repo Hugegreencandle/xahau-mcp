@@ -74,7 +74,7 @@ export function onChainResult(he: OnChainHookExecution): { decision: "accept" | 
  *   `otxn_field(wp,wl,fid)` reads: it looks up `ctx.otxnFields[String(fid)]` where `fid` is the
  *   sfield code the hook passes in. (Verified in src/sandbox.ts.)
  */
-export function reconstructContext(tx: Record<string, unknown>, hookAccountId: string): SandboxContext {
+export function reconstructContext(tx: Record<string, unknown>, hookAccountId: string, ledgerLastTime?: number): SandboxContext {
   const txType = tx.TransactionType as string | undefined;
   const ledgerIndex = tx.ledger_index;
   const ledgerSeq = typeof ledgerIndex === "number" ? ledgerIndex : typeof ledgerIndex === "string" ? Number(ledgerIndex) : undefined;
@@ -102,6 +102,7 @@ export function reconstructContext(tx: Record<string, unknown>, hookAccountId: s
     txType,
     hookAccountId,
     ledgerSeq: Number.isFinite(ledgerSeq) ? ledgerSeq : undefined,
+    ledgerLastTime: typeof ledgerLastTime === "number" ? ledgerLastTime : (typeof tx.date === "number" ? tx.date : undefined),
     otxnFields,
     otxnBlob,
   };
@@ -148,6 +149,7 @@ export interface FidelityCase {
   createCodeHex: string; // the hook's CreateCode (WASM) hex — the bytecode we execute
   hookExecution: OnChainHookExecution; // the single on-chain HookExecution we compare against
   hookAccountId: string; // 20-byte hex account the hook is installed on
+  ledgerLastTime?: number; // parent-ledger close time (Ripple time) so ledger_last_time() is real, not degraded
 }
 
 export interface FidelityCaseResult {
@@ -165,7 +167,7 @@ export interface FidelityCaseResult {
  * real bytecode, and compare to the on-chain HookExecution. No network access.
  */
 export function runFidelityCase(caseObj: FidelityCase): FidelityCaseResult {
-  const ctx = reconstructContext(caseObj.tx, caseObj.hookAccountId);
+  const ctx = reconstructContext(caseObj.tx, caseObj.hookAccountId, caseObj.ledgerLastTime);
   if (caseObj.hookHash) ctx.hookHash = caseObj.hookHash;
 
   let bytes: Uint8Array;
@@ -204,6 +206,7 @@ export function runFidelityCase(caseObj: FidelityCase): FidelityCaseResult {
 export interface CorpusCase {
   txHash: string;
   ledgerIndex?: number;
+  ledgerCloseTime?: number; // Ripple time of the ledger close (feeds ledger_last_time)
   tx: Record<string, unknown>;
   hookAccount: string; // r-address the hook(s) are installed on
   hookExecutions: OnChainHookExecution[]; // one per hook that ran in this tx
@@ -324,6 +327,7 @@ export function fidelityReport(corpus: HookCorpus): FidelityReport {
         createCodeHex: code,
         hookExecution: heWithEngine,
         hookAccountId,
+        ledgerLastTime: cs.ledgerCloseTime,
       });
 
       if (res.agree === null) {
