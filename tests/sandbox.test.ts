@@ -3,18 +3,20 @@ import { runHook } from "../src/sandbox.js";
 import { buildExitHook, buildHookWasm } from "./fixtures.js";
 
 describe("Hook VM (sandbox)", () => {
-  it("runs real bytecode and captures an accept with its return code", () => {
+  it("runs real bytecode and captures an accept with its return code (state applied)", () => {
     const r = runHook(buildExitHook("accept", 42));
     expect(r.exit).toBe("accept");
     expect(r.returnCode).toBe("42");
     expect(r.fidelity).toBe("LOCAL_VM");
     expect(r.degraded).toBe(false);
+    expect(r.stateApplied).toBe(true);
   });
 
-  it("captures a rollback with its return code", () => {
+  it("captures a rollback with its return code (state NOT applied)", () => {
     const r = runHook(buildExitHook("rollback", 7));
     expect(r.exit).toBe("rollback");
     expect(r.returnCode).toBe("7");
+    expect(r.stateApplied).toBe(false);
   });
 
   it("records unsupported API calls and marks the run degraded", () => {

@@ -76,7 +76,9 @@ export function floatCmp(xa: bigint, xb: bigint): number {
 /** float_compare(a,b,mode) — mode flags: 1=LT, 2=GT (combine for LTE/GTE etc.). Returns 1/0. */
 export function floatCompare(xa: bigint, xb: bigint, mode: number): bigint {
   const c = floatCmp(xa, xb); // -1,0,1
-  const EQ = 1, LT = 2, GT = 4; // matches hook-api COMPARE_* flags
+  // VERIFIED against hooks-rs c/hookapi.h: COMPARE_EQUAL=1, COMPARE_LESS=2, COMPARE_GREATER=4.
+  // (Do NOT "correct" to LESS=1/EQUAL=2 — that is the common-but-wrong assumption.)
+  const EQ = 1, LT = 2, GT = 4;
   let truth = false;
   if (mode & EQ && c === 0) truth = true;
   if (mode & LT && c < 0) truth = true;
@@ -122,6 +124,9 @@ export function floatDivide(xa: bigint, xb: bigint): bigint {
 
 export function floatInvert(x: bigint): bigint { return floatDivide(FLOAT_ONE, x); }
 
+// NOTE: all XFL ops here TRUNCATE on normalization (encode), they do not round-half-up like xahaud,
+// and float_mulratio's round_up flag is therefore not modeled (it would be lost in normalization).
+// This is a documented last-significant-digit fidelity gap — see README. Not faked as honored.
 export function floatMulratio(x: bigint, _roundUp: number, num: bigint, den: bigint): bigint {
   if (den === 0n) return DIVISION_BY_ZERO;
   const f = decode(x);

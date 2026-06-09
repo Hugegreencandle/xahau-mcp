@@ -11,8 +11,15 @@ interface RpcResponse<T> { result: T & { status?: string; error?: string; error_
 
 const TIMEOUT_MS = 8000;
 
+/** Operator override: XAHAU_RPC_URLS / XAHAU_TEST_RPC_URLS (comma-separated) take priority for failover. */
+function nodesFor(network: Network): string[] {
+  const env = network === "mainnet" ? process.env.XAHAU_RPC_URLS : process.env.XAHAU_TEST_RPC_URLS;
+  const override = (env ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return [...override, ...ENDPOINTS[network].rpc.filter((u) => !override.includes(u))];
+}
+
 export async function rpc<T = Record<string, unknown>>(method: string, params: Record<string, unknown>, network: Network = "mainnet"): Promise<T> {
-  const nodes = ENDPOINTS[network].rpc;
+  const nodes = nodesFor(network);
   if (!nodes.length) throw new RpcError(`no RPC endpoints configured for ${network}`);
   let lastErr: unknown;
   for (const url of nodes) {
