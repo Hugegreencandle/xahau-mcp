@@ -1,0 +1,8 @@
+{
+ "_note": "Xahau Genesis governance / network-reward constants. Reward accrual is governed by the Genesis Hook; exact emission params are read LIVE from the account reward fields (RewardAccumulator/RewardLgrFirst/RewardLgrLast) and the governance hook state. compute_reward applies the documented monthly-compounding model and labels fidelity.",
+ "genesisAccount": "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
+ "governanceSeats": 20,
+ "rewardDelayLedgers": 2600000,
+ "rewardRateMonthly_doc": 0.00333333333,
+ "caveat": "rewardDelayLedgers and rewardRateMonthly are documented defaults; the live Genesis hook state is authoritative and may differ. Verify with governance_state / live account fields before relying on a figure."
+}

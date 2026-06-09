@@ -1,0 +1,37 @@
+{
+  "name": "xahau-mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for the Xahau network — the first MCP with offline Hook intelligence: WASM inspection + a Hooks-specific static-analysis/security rule engine, plus read-only ledger, codec, governance and unsigned-tx tooling.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Dane Brown",
+  "homepage": "https://github.com/Hugegreencandle/xahau-mcp",
+  "repository": { "type": "git", "url": "git+https://github.com/Hugegreencandle/xahau-mcp.git" },
+  "keywords": ["xahau", "hooks", "xrpl", "mcp", "model-context-protocol", "smart-contracts", "wasm", "static-analysis", "blockchain"],
+  "bin": { "xahau-mcp": "dist/index.js" },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "data", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "smoke": "node dist/index.js --smoke",
+    "fetch:defs": "node scripts/fetch-definitions.mjs",
+    "fetch:hookapi": "node scripts/fetch-hook-api.mjs",
+    "fetch:all": "node scripts/fetch-definitions.mjs && node scripts/fetch-hook-api.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "xrpl-accountlib": "9.2.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.5",
+    "typescript": "5.7.2",
+    "vitest": "^4.1.7"
+  }
+}

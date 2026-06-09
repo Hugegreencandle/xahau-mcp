@@ -1,0 +1,21 @@
+{
+ "_note": "Read-only JSON-RPC over HTTPS. Failover in listed order. Verified reachable 2026-06-09.",
+ "mainnet": {
+  "network_id": 21337,
+  "rpc": [
+   "https://xahau.network"
+  ],
+  "wss": [
+   "wss://xahau.network"
+  ]
+ },
+ "testnet": {
+  "network_id": 21338,
+  "rpc": [
+   "https://xahau-test.net"
+  ],
+  "wss": [
+   "wss://xahau-test.net"
+  ]
+ }
+}
