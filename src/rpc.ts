@@ -62,3 +62,8 @@ export const getLedgerEntry = (params: Record<string, unknown>, network: Network
   rpc<{ node: Record<string, unknown> }>("ledger_entry", { ...params, ledger_index: "validated" }, network);
 export const getLedger = (ledgerIndex: string | number, network: Network) =>
   rpc<{ ledger: Record<string, unknown> }>("ledger", { ledger_index: ledgerIndex, transactions: false, expand: false }, network);
+export const getFee = (network: Network) => rpc<Record<string, unknown>>("fee", {}, network);
+export const getAccountLines = (account: string, network: Network) =>
+  rpc<{ lines: Record<string, unknown>[] }>("account_lines", { account, ledger_index: "validated" }, network);
+export const getAccountOffers = (account: string, network: Network) =>
+  rpc<{ offers: Record<string, unknown>[] }>("account_offers", { account, ledger_index: "validated" }, network);

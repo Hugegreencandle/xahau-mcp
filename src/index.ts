@@ -7,10 +7,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { DEFS_AVAILABLE, HOOKAPI_AVAILABLE, allTxTypes, decodeResult, GOVERNANCE } from "./defs.js";
+import { DEFS_AVAILABLE, HOOKAPI_AVAILABLE, allTxTypes, decodeResult, GOVERNANCE, ENDPOINTS } from "./defs.js";
 import * as rpc from "./rpc.js";
 import { decodeHookOn, encodeHookOn } from "./hookon.js";
 import { xahAmount, decodeTxBlob, encodeTxBlob, decodeSetHook, decodeUriTokenId } from "./codec.js";
+import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTime } from "./util.js";
 import { readWasm, hexToBytes, base64ToBytes } from "./wasm.js";
 import { lookupHookApi, hookApiCount, HOOK_FUNCTIONS } from "./hookapi.js";
 import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyzer.js";
@@ -33,7 +34,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "0.7.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "0.8.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -143,6 +144,33 @@ server.registerTool("get_ledger", {
   } catch (e) { return fail((e as Error).message); }
 });
 
+server.registerTool("get_fee", {
+  description: "Current network transaction fee (base fee in drops + load/queue state) — for building a tx with the right Fee. Read-only.",
+  inputSchema: { network: NET },
+}, async ({ network }) => {
+  try {
+    const r = await rpc.getFee(network as Net) as Record<string, any>;
+    const base = r.drops?.base_fee ?? r.drops?.minimum_fee;
+    return ok(`base fee ${base} drops · load factor ${r.current_queue_size ?? "?"}/${r.max_queue_size ?? "?"} queued`, { baseFeeDrops: base, openLedgerFeeDrops: r.drops?.open_ledger_fee, levels: r.levels, queue: { current: r.current_queue_size, max: r.max_queue_size }, raw: r });
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("get_account_lines", {
+  description: "Trustlines (issued-currency balances) held by an account. Read-only.",
+  inputSchema: { address: z.string().min(25), network: NET },
+}, async ({ address, network }) => {
+  try { const r = await rpc.getAccountLines(address, network as Net); return ok(`${address}: ${r.lines.length} trustline(s)`, { address, lines: r.lines }); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("get_account_offers", {
+  description: "Open DEX offers placed by an account. Read-only.",
+  inputSchema: { address: z.string().min(25), network: NET },
+}, async ({ address, network }) => {
+  try { const r = await rpc.getAccountOffers(address, network as Net); return ok(`${address}: ${r.offers.length} open offer(s)`, { address, offers: r.offers }); }
+  catch (e) { return fail((e as Error).message); }
+});
+
 /* ===================== Tier B — Codec / decode (offline) ===================== */
 
 server.registerTool("decode_hook_on", {
@@ -194,6 +222,31 @@ server.registerTool("xah_amount", {
   description: "Convert between XAH and drops (1 XAH = 1,000,000 drops). Offline.",
   inputSchema: { value: z.union([z.string(), z.number()]), from: z.enum(["xah", "drops"]) },
 }, async ({ value, from }) => { try { const a = xahAmount(value, from); return ok(`${a.xah} XAH = ${a.drops} drops`, a); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("validate_address", {
+  description: "Validate a Xahau/XRPL address (classic r-address or X-address) → type, account-id, embedded destination tag, network. Offline.",
+  inputSchema: { address: z.string() },
+}, async ({ address }) => { const v = validateAddress(address); return v.valid ? ok(`valid ${v.type}${"tag" in v && v.tag !== null ? ` (tag ${v.tag})` : ""}`, v) : fail((v as { reason: string }).reason, v); });
+
+server.registerTool("xaddress", {
+  description: "Encode a classic address + destination tag into an X-address, or decode an X-address back to classic + tag. Offline.",
+  inputSchema: { address: z.string().describe("classic r-address (to encode) or X-address (to decode)"), tag: z.number().optional(), test: z.boolean().optional() },
+}, async ({ address, tag, test }) => {
+  try {
+    if (address.trim().startsWith("X") || address.trim().startsWith("T")) { const d = xaddressDecode(address); return ok(`${d.classicAddress}${d.tag !== null ? ` tag ${d.tag}` : ""} (${d.network}net)`, d); }
+    const e = xaddressEncode(address, tag ?? null, test ?? false); return ok(e.xAddress, e);
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("currency_code", {
+  description: "Convert a currency between 3-char ISO code (e.g. USD) and its 160-bit/40-hex form. Non-standard 160-bit codes pass through. Offline.",
+  inputSchema: { input: z.string().describe("a 3-char code or a 40-hex currency") },
+}, async ({ input }) => { try { const c = currencyCode(input); return ok(`${c.code ?? "(non-standard)"} = ${c.hex}`, c); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("ripple_time", {
+  description: "Convert between Ripple time (seconds since 2000-01-01), Unix time, and ISO 8601. Xahau tx/ledger timestamps use Ripple time. Offline.",
+  inputSchema: { ripple: z.number().optional(), unix: z.number().optional(), iso: z.string().optional() },
+}, async ({ ripple, unix, iso }) => { try { const t = rippleTime({ ripple, unix, iso }); return ok(`ripple ${t.rippleTime} = ${t.iso}`, t); } catch (e) { return fail((e as Error).message); } });
 
 /* ===================== Tier C — Hook intelligence (the moat, offline) ===================== */
 
@@ -513,6 +566,30 @@ server.registerTool("build_payment_unsigned", {
   description: "Assemble an UNSIGNED XAH Payment (amount in drops). Returns unsigned JSON + offline signing instructions + payload preflight. Never signs; testnet by default.",
   inputSchema: { account: z.string().min(25), destination: z.string().min(25), amountXahDrops: z.string(), destinationTag: z.number().optional(), network: NET.default("testnet") },
 }, async (a) => { try { const r = buildPaymentUnsigned(a as any); return ok(`unsigned Payment ${a.amountXahDrops} drops → ${a.destination} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("prepare_transaction", {
+  description: "Autofill an unsigned transaction with live network values — Sequence (from the account), Fee (current base fee), LastLedgerSequence (now + offset), and NetworkID — so it's ready to sign OFFLINE. Read-only: fetches values, fills the tx, but NEVER signs or submits.",
+  inputSchema: { tx: z.record(z.string(), z.unknown()).describe("unsigned tx JSON; must include Account + TransactionType"), lastLedgerOffset: z.number().default(20), network: NET.default("testnet") },
+}, async ({ tx, lastLedgerOffset, network }) => {
+  try {
+    const t = { ...(tx as Record<string, any>) };
+    if (!t.Account || !t.TransactionType) return fail("tx must include Account and TransactionType");
+    const net = network as Net;
+    const [ai, fee, si] = await Promise.all([rpc.getAccountInfo(t.Account, net), rpc.getFee(net) as Promise<any>, rpc.getServerInfo(net) as Promise<any>]);
+    const seq = (ai.account_data as any).Sequence;
+    const baseFee = fee.drops?.base_fee ?? fee.drops?.minimum_fee ?? "10";
+    const curLedger = Number(String(si.info.complete_ledgers).split("-").pop());
+    if (t.Sequence === undefined) t.Sequence = seq;
+    if (t.Fee === undefined) t.Fee = String(baseFee);
+    if (t.LastLedgerSequence === undefined) t.LastLedgerSequence = curLedger + Math.max(1, lastLedgerOffset);
+    if (t.NetworkID === undefined) t.NetworkID = ENDPOINTS[net].network_id;
+    return ok(`prepared ${t.TransactionType} for ${t.Account}: seq ${t.Sequence}, fee ${t.Fee}, LLS ${t.LastLedgerSequence} (${net})`, {
+      unsignedTx: t, network: net,
+      autofilled: { sequence: t.Sequence, fee: t.Fee, lastLedgerSequence: t.LastLedgerSequence, networkId: t.NetworkID },
+      signingInstructions: "Now SIGN this OFFLINE with your own key (xaman / xrpl-accountlib) and submit. This tool only filled in network values — it never signs or submits. NEVER paste a secret here.",
+    });
+  } catch (e) { return fail((e as Error).message); }
+});
 
 /* ===================== Resources — offline reference data ===================== */
 // SDK 1.29.0: server.registerResource(name, uri, { ...ResourceMetadata }, async (uri) => ({ contents: [...] }))

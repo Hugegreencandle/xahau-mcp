@@ -46,13 +46,16 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | `decode_sethook` | A SetHook tx → its hook definitions, HookOn decoded. |
 | `decode_tx_blob` / `encode_tx_blob` | Xahau tx blob ⇄ JSON (unsigned). |
 | `decode_uritoken_id` · `xah_amount` | URIToken ID validation · XAH⇄drops. |
+| `validate_address` · `xaddress` | Validate classic/X-address (type, account-id, tag) · encode/decode X-addresses. |
+| `currency_code` · `ripple_time` | 3-char ISO ⇄ 160-bit currency · Ripple-time ⇄ Unix/ISO. |
 
 **Ledger (read-only RPC)**
 | Tool | Purpose |
 |---|---|
 | `xahau_server_info` · `get_account_info` · `get_account_objects` | Node/account reads. |
 | `get_account_hooks` · `get_hook_definition` · `get_hook_state` | Hook reads. |
-| `get_transaction` · `get_ledger` | Tx (with `HookExecutions`) · ledger reads. |
+| `get_transaction` · `get_ledger` · `get_fee` | Tx (with `HookExecutions`) · ledger · current network fee. |
+| `get_account_lines` · `get_account_offers` | Trustlines · open DEX offers. |
 
 **Economics / governance**
 | Tool | Purpose |
@@ -65,7 +68,8 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | Tool | Purpose |
 |---|---|
 | `build_sethook_unsigned` | UNSIGNED SetHook with automatic `analyze_hook` preflight. |
-| `build_claimreward_unsigned` · `build_import_unsigned` · `build_payment_unsigned` | UNSIGNED ClaimReward · Import/B2M (wraps a HEX XPOP) · Payment. |
+| `build_claimreward_unsigned` · `build_import_unsigned` · `build_payment_unsigned` | UNSIGNED ClaimReward · Import/B2M · Payment. |
+| `prepare_transaction` | Autofill Sequence/Fee/LastLedgerSequence/NetworkID from the live network → ready to sign offline (never signs). |
 
 ## Install
 
