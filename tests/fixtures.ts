@@ -21,7 +21,7 @@ export interface HookOpts {
   imports?: { module: string; name: string }[]; // function imports, in order
   exportHook?: boolean;
   exportCbak?: boolean;
-  loop?: "none" | "guarded" | "unguarded";
+  loop?: "none" | "guarded" | "unguarded" | "guarded-spin";
   memPages?: number;
 }
 
@@ -46,9 +46,12 @@ export function buildHookWasm(opts: HookOpts = {}): Uint8Array {
   const body: number[] = [];
   if (opts.loop && opts.loop !== "none") {
     body.push(0x03, 0x40); // loop, blocktype empty
-    if (opts.loop === "guarded" && guardIdx >= 0) {
-      body.push(0x41, 0x01, 0x41, 0x01, 0x10, ...uleb(guardIdx), 0x1a); // i32.const 1, i32.const 1, call _g, drop
+    if ((opts.loop === "guarded" || opts.loop === "guarded-spin") && guardIdx >= 0) {
+      // guarded-spin uses maxiter=0 (no per-guard cap) so only the VM's own budget can stop it
+      const maxiter = opts.loop === "guarded-spin" ? 0x00 : 0x01;
+      body.push(0x41, 0x01, 0x41, maxiter, 0x10, ...uleb(guardIdx), 0x1a); // i32.const 1, i32.const maxiter, call _g, drop
     }
+    if (opts.loop === "guarded-spin") body.push(0x0c, 0x00); // br 0 — branch back: actually spins
     body.push(0x0b); // end loop
   }
   body.push(0x0b); // end function

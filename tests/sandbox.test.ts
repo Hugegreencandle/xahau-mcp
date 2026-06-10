@@ -2,6 +2,23 @@ import { describe, it, expect } from "vitest";
 import { runHook } from "../src/sandbox.js";
 import { buildExitHook, buildHookWasm } from "./fixtures.js";
 
+describe("Hook VM execution bounds", () => {
+  it("refuses an unguarded loop before execution (honest halt)", () => {
+    const r = runHook(buildHookWasm({ loop: "unguarded", exportHook: true }));
+    expect(r.exit).toBe("halted");
+    expect(String(r.returnString ?? "")).toMatch(/unguarded loop/);
+  });
+
+  it("a guarded SPINNING loop (maxiter=0) is stopped by the VM budget, not a hang", () => {
+    const t0 = Date.now();
+    const r = runHook(buildHookWasm({ loop: "guarded-spin", exportHook: true }));
+    expect(Date.now() - t0).toBeLessThan(10_000); // bounded — returns rather than hanging
+    expect(r.exit).toBe("halted");
+    expect(String(r.returnString ?? "")).toMatch(/VM_BUDGET/);
+    expect(String(r.returnString ?? "")).toMatch(/not a consensus limit/); // honest labeling
+  });
+});
+
 describe("Hook VM (sandbox)", () => {
   it("runs real bytecode and captures an accept with its return code (state applied)", () => {
     const r = runHook(buildExitHook("accept", 42));
