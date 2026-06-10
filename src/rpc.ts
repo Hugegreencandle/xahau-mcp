@@ -67,3 +67,5 @@ export const getAccountLines = (account: string, network: Network) =>
   rpc<{ lines: Record<string, unknown>[] }>("account_lines", { account, ledger_index: "validated" }, network);
 export const getAccountOffers = (account: string, network: Network) =>
   rpc<{ offers: Record<string, unknown>[] }>("account_offers", { account, ledger_index: "validated" }, network);
+export const getAccountTx = (account: string, network: Network, limit = 10) =>
+  rpc<{ transactions: Record<string, unknown>[] }>("account_tx", { account, limit, ledger_index_min: -1, ledger_index_max: -1 }, network);

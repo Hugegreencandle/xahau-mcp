@@ -14,6 +14,7 @@ import { xahAmount, decodeTxBlob, encodeTxBlob, decodeSetHook, decodeUriTokenId 
 import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTime, decodeAmount, describeTx } from "./util.js";
 import { decodeXpop } from "./xpop.js";
 import { decodeLeaseUri } from "./evernode.js";
+import { explainAccount } from "./explain.js";
 import { readWasm, hexToBytes, base64ToBytes } from "./wasm.js";
 import { lookupHookApi, hookApiCount, HOOK_FUNCTIONS } from "./hookapi.js";
 import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyzer.js";
@@ -183,6 +184,23 @@ server.registerTool("get_account_offers", {
 }, async ({ address, network }) => {
   try { const r = await rpc.getAccountOffers(address, network as Net); return ok(`${address}: ${r.offers.length} open offer(s)`, { address, offers: r.offers }); }
   catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("explain_account", {
+  description: "One-call plain-English account snapshot: balance, key-safety read (master/regular key), installed Hooks (+what they fire on), trustlines, URITokens (Evernode leases auto-decoded), and recent activity — plus warnings and notes. Read-only; exactly 5 serial RPC reads (>=1100ms apart).",
+  inputSchema: { address: z.string().min(25).describe("r-address"), network: NET },
+}, async ({ address, network }) => {
+  try {
+    const net = network as Net;
+    const r = await explainAccount(address, {
+      getAccountInfo: async (a) => (await rpc.getAccountInfo(a, net)) as Record<string, any>,
+      getHookObjects: async (a) => (await rpc.getAccountObjects(a, net, "hook")).account_objects as Record<string, any>[],
+      getLines: async (a) => (await rpc.getAccountLines(a, net)).lines as Record<string, any>[],
+      getUriTokens: async (a) => (await rpc.getAccountObjects(a, net, "uri_token")).account_objects as Record<string, any>[],
+      getRecentTx: async (a) => (await rpc.getAccountTx(a, net, 10)).transactions as Record<string, any>[],
+    });
+    return ok(r.summary, r as unknown as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message); }
 });
 
 server.registerTool("get_account_uritokens", {
