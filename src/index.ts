@@ -15,6 +15,7 @@ import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTi
 import { decodeXpop } from "./xpop.js";
 import { decodeLeaseUri } from "./evernode.js";
 import { explainAccount } from "./explain.js";
+import { inspectEmitted } from "./emitted.js";
 import { readWasm, hexToBytes, base64ToBytes } from "./wasm.js";
 import { lookupHookApi, hookApiCount, HOOK_FUNCTIONS } from "./hookapi.js";
 import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyzer.js";
@@ -309,6 +310,14 @@ server.registerTool("decode_xpop", {
   outputSchema: DECODE_XPOP_OUT,
 }, async ({ xpop }) => {
   try { const d = decodeXpop(xpop as string | Record<string, unknown>); return ok(d.summary, d as unknown as Record<string, unknown>); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("inspect_emitted_tx", {
+  description: "Decode what a hook's emit() actually built: pass the emitted[] blob hex(es) from an execute_hook result → each decoded to tx JSON + a plain-English 'what it tries to send' summary + danger score (scam rules). Closes the loop on emitter hooks. Offline.",
+  inputSchema: { emitted: z.array(z.string()).min(1).describe("emitted blob hex(es) from execute_hook's `emitted` array") },
+}, async ({ emitted }) => {
+  try { const r = inspectEmitted(emitted); return ok(r.headline, r as unknown as Record<string, unknown>); }
   catch (e) { return fail((e as Error).message); }
 });
 
