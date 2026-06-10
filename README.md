@@ -29,7 +29,10 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 |---|---|
 | `execute_hook` | **Run the real Hook bytecode in a local VM** against a simulated tx/state → actual accept/rollback, return code, state writes, emits, trace (`LOCAL_VM`). |
 | `fuzz_hook` | **Differential fuzzing**: sweep many generated transactions through the VM to map the hook's accept/rollback **decision boundary** (which tx types / amounts it accepts vs rejects). |
+| `annotate_hook_trace` | **Decode an `execute_hook` `trace[]`** into human-readable values by byte-width: canonical XFL float (`definite`), int64/native-drops (both endians), UInt32 + Ripple-epoch date, candidate account-id → r-address (`possible`), 32-byte hash. Raw hex always preserved; offline. |
 | `hook_report` | **One-call full report**: structure + plain-English classification + security findings + fee. |
+| `hook_execution_postmortem` | **Post-mortem a real on-chain tx's hooks**: fetch the tx + its `meta.HookExecutions` + engine result, then run each fired hook's **real bytecode** through the VM and compare the VM's accept/rollback to what the chain recorded. On-chain decision is authoritative; VM run is `LOCAL_VM`; `agree` is `null` (not false) when degraded/indeterminate. Serial RPC: 1 `tx` + 1 `ledger_entry` per unique HookHash. |
+| `vm_fidelity_report` | **Honest fidelity metric**: replays a committed corpus of real mainnet HookExecutions through the VM and reports agreement % over **comparable (non-degraded)** runs only; offline. |
 | `classify_hook` | Infer in plain English what a hook does (firewall/emitter/stateful/financial/…). |
 | `hook_diff` | Compare two hook versions — API/HookOn/size deltas + newly-gained sensitive capabilities. |
 | `scaffold_hook` | **Generate a starter Hook in C** for an intent (firewall/payment-limit/state-counter/…) — then verify with analyze/execute. |
@@ -53,6 +56,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | `currency_code` · `ripple_time` | 3-char ISO ⇄ 160-bit currency · Ripple-time ⇄ Unix/ISO. |
 | `decode_amount` | Decode native drops / 8-byte / 48-byte issued STAmount / amount object → value+currency+issuer. |
 | `decode_sign_request` | Decode a Xaman txjson or tx_blob → plain-English "what you authorize" + safety warnings. |
+| `scam_check` | Score a sign request (txjson or tx_blob) for risky patterns → `dangerScore` 0-100 + SAFE/CAUTION/DANGER tier + per-rule findings (SetHook, AccountDelete-to-other, regular-key/signer-list changes, large native payment, no-expiry, pre-signed). Offline heuristic on tx **shape only** — every finding is a **potential** risk, never a confirmed scam; no block-list lookup, no on-chain malice check. |
 
 **Ledger (read-only RPC)**
 | Tool | Purpose |

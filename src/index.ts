@@ -17,6 +17,7 @@ import { readWasm, hexToBytes, base64ToBytes } from "./wasm.js";
 import { lookupHookApi, hookApiCount, HOOK_FUNCTIONS } from "./hookapi.js";
 import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyzer.js";
 import { runHook } from "./sandbox.js";
+import { annotateHookTrace } from "./trace.js";
 import { fuzzHook } from "./fuzz.js";
 import { classifyHook } from "./classify.js";
 import { diffHooks } from "./diff.js";
@@ -26,6 +27,8 @@ import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned } from "./builders.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
+import { hookExecutionPostmortem } from "./postmortem.js";
+import { scorePayload } from "./scam.js";
 import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT } from "./outputSchemas.js";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -44,7 +47,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "1.2.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "1.3.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -313,6 +316,18 @@ server.registerTool("decode_sign_request", {
   } catch (e) { return fail((e as Error).message); }
 });
 
+server.registerTool("scam_check", {
+  description: "Score a sign request (txjson or raw tx_blob hex) for risky patterns BEFORE signing: returns dangerScore 0-100, a SAFE/CAUTION/DANGER tier, a plain-English verdict, and per-rule findings (SetHook, AccountDelete-to-other, regular-key/signer-list changes, very large native payment, no-expiry replay risk, pre-signed blob). Offline + read-only. HONESTY: every finding is a POTENTIAL risk, NOT a confirmed scam — this tool does NOT consult any block list and NEVER verifies on-chain whether an address is malicious; it reads the transaction shape only. DANGER is reserved for near-universally-malicious/irreversible patterns.",
+  inputSchema: { txjson: z.record(z.string(), z.unknown()).optional(), txBlobHex: z.string().optional() },
+}, async ({ txjson, txBlobHex }) => {
+  try {
+    const tx = (txjson as Record<string, any> | undefined) ?? (txBlobHex ? (decodeTxBlob(txBlobHex) as Record<string, any>) : undefined);
+    if (!tx) return fail("provide txjson or txBlobHex");
+    const r = scorePayload(tx);
+    return ok(`${r.tier} (score ${r.dangerScore}/100) — ${r.verdict}`, r as unknown as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message); }
+});
+
 /* ===================== Tier C — Hook intelligence (the moat, offline) ===================== */
 
 const WASM_IN = { wasmHex: z.string().optional(), wasmBase64: z.string().optional() };
@@ -443,6 +458,18 @@ server.registerTool("execute_hook", {
     }
     const tail = r.degraded ? " ⚠ DEGRADED" : "";
     return ok(`${r.exit.toUpperCase()}${r.returnCode !== null ? ` code=${r.returnCode}` : ""}${r.returnString ? ` "${r.returnString}"` : ""} · ${r.stateWrites.length} state write(s) · ${r.emitted.length} emit(s)${resolved.length ? ` · resolved ${resolved.length} keylet(s)` : ""}${tail}`, { ...(r as unknown as Record<string, unknown>), resolvedKeylets: resolved });
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("annotate_hook_trace", {
+  description: "Annotate the trace[] array from an execute_hook result. Each entry is \"label: HEXVALUE\" (the hook's trace() memory dump). Decodes each blob by byte-width: 8-byte → canonical XFL float (definite) else int64 (both endians) + native-drops reading; 4-byte → UInt32 (both endians) + Ripple-epoch ISO date if in range; 20-byte → candidate account-id → r-address (possible, since arbitrary bytes can coincidentally encode); 32-byte → possible tx/hook hash (heuristic); other widths → raw blob. The raw hex is ALWAYS preserved as the primary field; nothing is suppressed; confidence is 'definite' only for canonical XFL. Fully offline, no network.",
+  inputSchema: {
+    trace: z.array(z.string()).describe("trace[] from an execute_hook result; each element \"label: HEXVALUE\""),
+  },
+}, async ({ trace }) => {
+  try {
+    const r = annotateHookTrace(trace);
+    return ok(`annotated ${r.decoded.length} trace entr${r.decoded.length === 1 ? "y" : "ies"}`, r as unknown as Record<string, unknown>);
   } catch (e) { return fail((e as Error).message); }
 });
 
@@ -699,6 +726,28 @@ server.registerTool("vm_fidelity_report", {
     if (includeMismatches) out.mismatches = rep.mismatches;
     return ok(rep.headline, out);
   } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("hook_execution_postmortem", {
+  description: "POST-MORTEM a real Xahau transaction's hooks: fetch the tx (with meta.HookExecutions + engine result), then for EACH hook that fired, run its REAL bytecode through the local VM and compare the VM's accept/rollback DIRECTION to what the chain actually recorded. Answers 'why did these hooks accept/rollback, and would the VM agree?'. The on-chain decision is AUTHORITATIVE; the VM run is best-effort and always labeled fidelity=LOCAL_VM. `agree` is null (not false) when the VM run is degraded/halted/no-exit or the on-chain decision is indeterminate (e.g. no CreateCode available) — never scored as a match or miss. Read-only; never signs/submits. Serial rate-limited RPC: 1 `tx` call + 1 `ledger_entry` per UNIQUE HookHash (deduplicated), each >=1100ms apart; tolerates literal 'Rate limited' bodies via the shared client.",
+  inputSchema: {
+    txHash: z.string().length(64).describe("Xahau tx hash of the transaction to post-mortem"),
+    network: NET,
+  },
+}, async ({ txHash, network }) => {
+  try {
+    const res = await hookExecutionPostmortem(txHash, network as Net, {
+      fetchTx: (h, n) => rpc.getTx(h, n) as Promise<Record<string, unknown>>,
+      fetchHookDefinition: async (hash, n) => {
+        try {
+          const r = await rpc.getLedgerEntry({ hook_definition: hash }, n);
+          const code = (r.node as Record<string, unknown>)?.CreateCode;
+          return typeof code === "string" ? code : null;
+        } catch { return null; }
+      },
+    });
+    return ok(res.summary, res as unknown as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message, { txHash, network }); }
 });
 
 /* ===================== Resources — offline reference data ===================== */
