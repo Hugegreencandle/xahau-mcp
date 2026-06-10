@@ -11,7 +11,9 @@ export interface ScaffoldOpts {
   maxDrops?: string;    // for payment_limit
 }
 
-const HEADER = `#include <stdint.h>\n#include "hookapi.h"\n\n// cbak() handles the result of any transactions this hook emit()s. Safe no-op if you don't emit.\nint64_t cbak(uint32_t reserved) { _g(1,1); return 0; }\n`;
+// Self-contained helper macros (guarded so they don't clash if your toolchain already defines them).
+const HELPERS = `// --- helpers (inlined so this compiles standalone) ---\n#ifndef AMOUNT_TO_DROPS\n#define AMOUNT_TO_DROPS(b) (( ((uint64_t)(b)[0]<<56)|((uint64_t)(b)[1]<<48)|((uint64_t)(b)[2]<<40)|((uint64_t)(b)[3]<<32)|((uint64_t)(b)[4]<<24)|((uint64_t)(b)[5]<<16)|((uint64_t)(b)[6]<<8)|((uint64_t)(b)[7]) ) & 0x3FFFFFFFFFFFFFFFULL)\n#endif\n#ifndef INT64_FROM_BUF\n#define INT64_FROM_BUF(b) (((int64_t)(b)[0]<<56)|((int64_t)(b)[1]<<48)|((int64_t)(b)[2]<<40)|((int64_t)(b)[3]<<32)|((int64_t)(b)[4]<<24)|((int64_t)(b)[5]<<16)|((int64_t)(b)[6]<<8)|((int64_t)(b)[7]))\n#endif\n#ifndef INT64_TO_BUF\n#define INT64_TO_BUF(b,v) do { (b)[0]=((v)>>56)&0xff;(b)[1]=((v)>>48)&0xff;(b)[2]=((v)>>40)&0xff;(b)[3]=((v)>>32)&0xff;(b)[4]=((v)>>24)&0xff;(b)[5]=((v)>>16)&0xff;(b)[6]=((v)>>8)&0xff;(b)[7]=(v)&0xff; } while(0)\n#endif\n`;
+const HEADER = `#include <stdint.h>\n#include "hookapi.h"\n\n${HELPERS}\n// cbak() handles the result of any transactions this hook emit()s. Safe no-op if you don't emit.\nint64_t cbak(uint32_t reserved) { _g(1,1); return 0; }\n`;
 
 const TT: Record<string, string> = {
   Payment: "ttPAYMENT", SetHook: "ttHOOK_SET", TrustSet: "ttTRUST_SET", OfferCreate: "ttOFFER_CREATE",
@@ -50,7 +52,7 @@ export function scaffoldHook(opts: ScaffoldOpts): { archetype: string; language:
     notes: [
       "STARTING POINT — not production-ready. Audit + simulate before mainnet: run analyze_hook on the compiled WASM, then execute_hook / fuzz_hook against representative transactions.",
       "Set the HookOn to the minimum tx types you need (encode_hook_on); a too-broad HookOn wastes fees and triggers HOOK-006.",
-      "Macros like SBUF/AMOUNT_TO_DROPS/INT64_*_BUF and tt*/sf* constants come from the Hooks C headers (hookapi.h, macro.h, sfcodes.h). Confirm exact names against your toolchain.",
+      "The AMOUNT_TO_DROPS / INT64_*_BUF helpers are inlined (guarded) so this compiles standalone; SBUF and the tt*/sf* constants come from the Hooks C headers (hookapi.h, macro.h, sfcodes.h).",
     ],
   };
 }

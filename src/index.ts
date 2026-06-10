@@ -43,7 +43,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "1.0.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "1.1.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -266,6 +266,11 @@ server.registerTool("currency_code", {
   description: "Convert a currency between 3-char ISO code (e.g. USD) and its 160-bit/40-hex form. Non-standard 160-bit codes pass through. Offline.",
   inputSchema: { input: z.string().describe("a 3-char code or a 40-hex currency") },
 }, async ({ input }) => { try { const c = currencyCode(input); return ok(`${c.code ?? "(non-standard)"} = ${c.hex}`, c); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("decode_result", {
+  description: "Decode a transaction engine result code (e.g. 0/tesSUCCESS, 153/tecHOOK_REJECTED) ⇄ its name. Accepts a number or the result-code name. Offline.",
+  inputSchema: { result: z.union([z.number(), z.string()]).describe("a result code number or name") },
+}, async ({ result }) => { const d = decodeResult(result); return d.known ? ok(`${d.name} (${d.code})`, d) : fail(`unknown result code: ${result}`, d); });
 
 server.registerTool("ripple_time", {
   description: "Convert between Ripple time (seconds since 2000-01-01), Unix time, and ISO 8601. Xahau tx/ledger timestamps use Ripple time. Offline.",

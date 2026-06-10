@@ -48,6 +48,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | `decode_tx_blob` / `encode_tx_blob` | Xahau tx blob ⇄ JSON (unsigned). |
 | `decode_uritoken_id` · `xah_amount` | URIToken ID validation · XAH⇄drops. |
 | `decode_xpop` | Decode an Import/Burn2Mint XPOP → source ledger, inner burn tx, burned drops, UNL validators. |
+| `decode_result` | Engine result code ⇄ name (e.g. 153 ⇄ tecHOOK_REJECTED). |
 | `validate_address` · `xaddress` | Validate classic/X-address (type, account-id, tag) · encode/decode X-addresses. |
 | `currency_code` · `ripple_time` | 3-char ISO ⇄ 160-bit currency · Ripple-time ⇄ Unix/ISO. |
 | `decode_amount` | Decode native drops / 8-byte / 48-byte issued STAmount / amount object → value+currency+issuer. |
@@ -102,7 +103,7 @@ then `npm install -g @hugegreencandle/xahau-mcp`. (The `github:` install above n
 
 Add to an MCP client (e.g. Claude Code / Desktop):
 ```json
-{ "mcpServers": { "xahau": { "command": "node", "args": ["/path/to/xahau-mcp/dist/index.js"] } } }
+{ "mcpServers": { "xahau": { "command": "xahau-mcp" } } }
 ```
 
 ## Security
