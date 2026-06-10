@@ -16,14 +16,75 @@ transactions, but it can never move your money or sign anything. Safe to point a
 
 ## Setting it up (one time)
 
-Install it and add it to your AI assistant (full steps in the [README](../README.md)):
+You need **Node.js 20+** (one-time: [nodejs.org](https://nodejs.org)). Then install xahau-mcp:
 
 ```bash
 npm install -g github:Hugegreencandle/xahau-mcp
 ```
 
-Then point Claude Desktop / Claude Code at it. After that, everything below is just *typing a
-question.*
+That gives you a command called `xahau-mcp`. Test it works:
+
+```bash
+xahau-mcp --smoke
+```
+
+You should see a health line ending in `live mainnet read: … OK`. Now connect it to whatever you use:
+
+### Claude Desktop
+
+1. Open **Settings → Developer → Edit Config** (or edit the file directly):
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+2. Add xahau-mcp under `mcpServers`:
+   ```json
+   {
+     "mcpServers": {
+       "xahau": { "command": "xahau-mcp" }
+     }
+   }
+   ```
+   (If `xahau-mcp` isn't found, use the npx form instead: `"command": "npx", "args": ["-y", "github:Hugegreencandle/xahau-mcp"]`.)
+3. **Fully quit and reopen Claude Desktop.** You'll see a 🔌/tools icon — "xahau" should be listed.
+
+### Claude Code (CLI)
+
+One command:
+
+```bash
+claude mcp add xahau -- xahau-mcp
+```
+
+(or `claude mcp add xahau -- npx -y github:Hugegreencandle/xahau-mcp`). Check it with `claude mcp list`. That's it — start a session and ask away.
+
+### Codex CLI
+
+Add it to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.xahau]
+command = "xahau-mcp"
+# or:  command = "npx"
+#      args = ["-y", "github:Hugegreencandle/xahau-mcp"]
+```
+
+Restart Codex. (MCP config formats move fast — if this differs, check your Codex version's MCP docs; the command to run is always just `xahau-mcp`.)
+
+### Any other MCP client / local testing
+
+xahau-mcp is a standard **stdio MCP server** — any MCP-compatible client connects by running the
+command `xahau-mcp` (or `node /path/to/xahau-mcp/dist/index.js`). To explore the tools yourself with
+no chat client, use the official MCP Inspector:
+
+```bash
+npx @modelcontextprotocol/inspector xahau-mcp
+```
+
+It opens a local UI where you can click through and run every tool by hand.
+
+### Confirm it's connected
+
+Ask your assistant: **"What's the current Xahau transaction fee?"** If it answers with a real number,
+you're live. From here, everything below is just *typing a question.*
 
 ---
 
