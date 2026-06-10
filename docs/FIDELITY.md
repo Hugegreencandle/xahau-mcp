@@ -104,19 +104,29 @@ captured (so `ledger_last_time()` is real) and each account's pre-execution hook
 
 | metric | value |
 |---|---|
-| total / comparable | **30 / 30** |
-| agreements (VM decision == on-chain) | **1** |
-| **agreementPct** | **3.3%** |
-| degraded / excluded | **0** |
+| total / comparable | **30 / 29** |
+| agreements (VM decision == on-chain) | **0** |
+| **agreementPct** | **0% (29 comparable)** |
+| degraded / excluded | **1** |
 
-**Per-hook is the real signal — the aggregate is composition-sensitive:**
+**Per-hook:**
 
 | HookHash (prefix) | comparable | agreementPct | what it is |
 |---|---|---|---|
-| `610F33B8EBF7…` (genesis reward) | 1 | **100%** | reads own state + XFL, no foreign/slot deps |
 | `1F7C84E14313…` (Evernode-style) | 29 | **0%** | reads **foreign-account state + keylet-resolved slots** |
+| `610F33B8EBF7…` (genesis reward) | 0 | n/a (degraded) | needs more context once its real memory + account are connected |
 
-(An earlier 12-case snapshot included `858715…` at **60%** — corroborating the spectrum.)
+> **Why this is *lower* than the earlier 3.3% — and why that's correct.** An expert panel found a
+> real VM bug: the local VM was reading/writing a **disconnected scratch buffer** for hooks that
+> define linear memory but don't *export* it (which most real hooks don't). That's now fixed — the VM
+> splices a memory export so it operates on the hook's *real* memory (`src/wasm.ts ensureMemoryExport`,
+> same bytecode, nothing faked). With the bug fixed, the reward hook no longer *accidentally* accepts
+> on a zeroed buffer; it honestly degrades when its full context isn't reconstructed. The old 3.3%
+> was partly an artifact of the bug. We also now populate `otxn_param`/`hook_param` (keyed by hex, not
+> ASCII) from the tx — correctness fixes that don't move this Evernode-dominated corpus but improve
+> `execute_hook` for every hook with internal data constants.
+
+(An earlier 12-case snapshot showed `858715…` at **60%** — simpler hooks still reproduce well.)
 
 ### What this means — the honest, precise picture
 

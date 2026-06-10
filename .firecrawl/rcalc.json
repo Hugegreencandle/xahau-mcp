@@ -1,0 +1,1224 @@
+Balance Rewards | Xahau Docs
+  URL: https://xahau.network/docs/features/network-features/balance-rewards/
+  The Balance Rewards feature is a unique aspect of the Xahau network that allows users to accumulate and claim rewards based on their account balance.
+
+  --- Content ---
+  [Skip to content](https://xahau.network/docs/features/network-features/balance-rewards/#_top)
+  
+  # Balance Rewards
+  
+  The Balance Rewards feature is a unique aspect of the Xahau network that allows users to accumulate and claim rewards based on their account balance. This feature is implemented through a combination of native code (BalanceRewards Amendment) and hook code (Genesis Account’s Reward Hook).
+  
+  ### Transaction Types
+  
+  [Section titled “Transaction Types”](https://xahau.network/docs/features/network-features/balance-rewards/#transaction-types)
+  
+  #### ClaimReward
+  
+  [Section titled “ClaimReward”](https://xahau.network/docs/features/network-features/balance-rewards/#claimreward)
+  
+  A `ClaimReward` transaction allows an account to claim the rewards it has accumulated. The rewards can be claimed by the account owner or by a specified issuer. The account can also opt-out of rewards by setting the Flags field to 1.
+  
+  [ClaimReward](https://xahau.network/docs/protocol-reference/transactions/transaction-types/claimreward)
+  
+  #### GenesisMint
+  
+  [Section titled “GenesisMint”](https://xahau.network/docs/features/network-features/balance-rewards/#genesismint)
+  
+  The `GenesisMint` transaction type is also associated with the Balance Rewards feature. This is an Emitted transaction that is executed through the Reward Hook every time a user claims balance rewards.
+  
+  [GenesisMint - (Emitted Txn)](https://xahau.network/docs/protocol-reference/transactions/transaction-types/genesismint-emitted-txn)
+  
+  ## Select your cookie preferences
+  
+  We use cookies to ensure you get the best experience on our website.
+  
+  Accept allReject all
+  
+  Manage preferences
+  
+  [Privacy Policy](https://xahau.network/privacy-policy/)
+  --- End Content ---
+
+Learning Xahau: Automating Reward Claims with Hooks and CronSet
+  URL: https://dev.to/ekiserrepe/learning-xahau-automating-reward-claims-with-hooks-and-cronset-n4k
+  Every account that opts in can claim rewards approximately every 30 days. But here's the thing: manually tracking when to claim and executing ...
+
+  --- Content ---
+  ## Introduction
+  
+  If you've been following the [Xahau](https://xahau.network/) blockchain, you know that claiming rewards is a fundamental part of participating in the ecosystem. Every account that opts in can claim rewards approximately every 30 days. But here's the thing: manually tracking when to claim and executing transactions every month can become tedious. The closest thing that exists today is the fantastic [Balance Adjustment](https://help.xaman.app/app/all-about-xapps/xahau-xapps/balance-adjustment) app for [Xaman](https://xaman.app/), which sends you a push notification as the date approaches so you can claim your XAH. What if we could automate this entire process?
+  
+  Today, I'm excited to share a complete example solution that automates reward claiming on Xahau using Hooks and CronSet transactions. This tutorial covers the entire lifecycle of reward automation. Of course, it's an example meant to inspire others to build better solutions.
+  
+  **Update:** I created a wizard to help you configure the entire process in an easy way using Xaman: [https://claim.xahau.love](https://claim.xahau.love/). They guys from [XahauExplorer](https://xahauexplorer.com/) also have one: [https://xahauexplorer.com/services/reward-auto-claim](https://xahauexplorer.com/services/reward-auto-claim)
+  
+  ## The Problem We're Solving
+  
+  Let me paint you a picture. You have multiple Xahau accounts, each eligible for rewards every 30 days, 2 hours, and 13 minutes (precisely 2,599,980 seconds). Missing a claim means delaying your rewards. Tracking multiple accounts manually? That's a recipe for mistakes and missed opportunities.
+  
+  The traditional approach requires:
+  
+  - Remembering when each account last claimed
+  - Calculating the next eligible time
+  - Being available to submit transactions at the right moment
+  - Repeating this process indefinitely
+  
+  There has to be a better way, right?
+  
+  ## The Solution: Combining Hooks with CronSet
+  
+  You can find the repository with the entire process at this link: [https://github.com/Ekiserrepe/cron-claimreward-xahau](https://github.com/Ekiserrepe/cron-claimreward-xahau)
+  
+  Our automated reward claiming system leverages two powerful Xahau features:
+  
+  1. **Hooks**: Smart contracts that execute automatically on transactions
+  2. **CronSet**: Scheduled transactions that run at predetermined intervals
+  
+  By combining these technologies, we create a "set it and forget it" system that claims your rewards automatically for months or even years ahead.
+  
+  ## Understanding the Architecture
+  
+  The system consists of several interconnected components:
+  
+  ```
+  Account Setup → Hook Installation → Cron Scheduling → Automated Execution
+  ```
+  
+  Enter fullscreen modeExit fullscreen mode
+  
+  Each component plays a crucial role:
+  
+  ### 1\. The ClaimReward Hook (C Code)
+  
+  The heart of our automation is a Hook written in C that executes ClaimReward transactions automatically. This hook is a simplified copy of the [TreasuryHook](https://github.com/Xahau/TreasuryHook/) which I recommend checking out.
+  
+  The Hook hash (`805351CE26FB79DA00647CEFED502F7E15C2ACCCE254F11DEFEDDCE241F8E9CA`) is consistent across both testnet and mainnet, ensuring reliability and trustworthiness.
+  
+  ```
+  #include "hookapi.h"
+  
+  // Macro to flip endianness for 32-bit values
+  #define FLIP_ENDIAN(x) ((((x) & 0xFF000000) >> 24) | \
+                          (((x) & 0x00FF0000) >> 8)  | \
+                          (((x) & 0x0000FF00) << 8)  | \
+                          (((x) & 0x000000FF) << 24))
+  
+  // ClaimReward transaction template
+  uint8_t ctxn[251] =
+  {
+  /* size,upto */
+  /* 3,    0, tt = ClaimReward      */   0x12U, 0x00U, 0x62U,
+  /* 5,    3  flags                 */   0x22U, 0x00U, 0x00U, 0x00U, 0x00U,
+  /* 5,    8, sequence              */   0x24U, 0x00U, 0x00U, 0x00U, 0x00U,
+  /* 6,   13, firstledgersequence   */   0x20U, 0x1AU, 0x00U, 0x00U, 0x00U, 0x00U,
+  /* 6,   19, lastledgersequence    */   0x20U, 0x1BU, 0x00U, 0x00U, 0x00U, 0x00U,
+  /* 9,   25, fee                   */   0x68U, 0x40U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+  /* 35,  34, signingpubkey         */   0x73U, 0x21U, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  /* 22,  69, account               */   0x81U, 0x14U, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  /* 22,  91, issuer                */   0x84U, 0x14U, 0xB5U, 0xF7U, 0x62U, 0x79U, 0x8AU, 0x53U, 0xD5U, 0x43U, 0xA0U, 0x14U, 0xCAU, 0xF8U, 0xB2U, 0x97U, 0xCFU, 0xF8U, 0xF2U, 0xF9U, 0x37U, 0xE8U,
+  /* 138, 113  emit details          */  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                                         0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                                         0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  /* 0,  251                        */
+  };
+  
+  #define CFLS_OUT (ctxn + 15U)
+  #define CLLS_OUT (ctxn + 21U)
+  #define CFEE_OUT (ctxn + 26U)
+  #define CACCOUNT_OUT (ctxn + 71U)
+  #define CEMIT_OUT (ctxn + 113U)
+  
+  #define BE_DROPS(drops)\
+  {\
+          uint64_t drops_tmp = drops;\
+          uint8_t* b = (uint8_t*)&drops;\
+          *b++ = 0b01000000 + (( drops_tmp >> 56 ) & 0b00111111 );\
+          *b++ = (drops_tmp >> 48) & 0xFFU;\
+          *b++ = (drops_tmp >> 40) & 0xFFU;\
+          *b++ = (drops_tmp >> 32) & 0xFFU;\
+          *b++ = (drops_tmp >> 24) & 0xFFU;\
+          *b++ = (drops_tmp >> 16) & 0xFFU;\
+          *b++ = (drops_tmp >>  8) & 0xFFU;\
+          *b++ = (drops_tmp >>  0) & 0xFFU;\
+  }
+  
+  // Callback function
+  int64_t cbak(uint32_t reserve)
+  {
+      accept((uint32_t)"Callback completed", 18, __LINE__);
+      return 0;
+  }
+  
+  // Main hook function using state_foreign for custom namespace
+  int64_t hook(uint32_t reserved)
+  {
+      // Proceed with ClaimReward emission
+      uint32_t current_ledger = ledger_seq();
+      uint32_t fls = current_ledger + 1;
+      uint32_t lls = fls + 4;
+  
+      etxn_reserve(1);
+      uint8_t emithash[32];
+  
+      hook_account((uint32_t)CACCOUNT_OUT, 20);
+      *((uint32_t *)(CFLS_OUT)) = FLIP_ENDIAN(fls);
+      *((uint32_t *)(CLLS_OUT)) = FLIP_ENDIAN(lls);
+      etxn_details((uint32_t)CEMIT_OUT, 138U);
+  
+      int64_t fee = etxn_fee_base((uint32_t)ctxn, sizeof(ctxn));
+      BE_DROPS(fee);
+      *((uint64_t*)(CFEE_OUT)) = fee;
+  
+      if (emit(SBUF(emithash), (uint32_t)ctxn, sizeof(ctxn)) != 32)
+          rollback((uint32_t)"AutoReward: Failed to emit claim transaction.", 45, __LINE__);
+  
+      accept((uint32_t)"AutoReward: Claim emitted successfully.", 39, __LINE__);
+      _g(1, 1);
+      return 0;
+  }
+  ```
+  
+  Enter fullscreen modeExit fullscreen mode
+  
+  ### 2\. Account Configuration Scripts
+  
+  Before automating, we need to prepare the account properly:
+  
+  - **accountSet.js**: Configures basic account settings
+  - **checkAccount.js**: Analyzes account status and calculates optimal claiming times
+  - **installHook.js**: Deploys the ClaimReward Hook to your account
+  
+  ### 3\. The CronSet Orchestrator
+  
+  This is where the magic happens. The CronSet transaction schedules automatic executions with these key parameters:
+  
+  - **StartTime**: When to begin automated claiming
+  - **DelaySeconds**: The interval between claims (2,603,580 seconds with safety margin)
+  - **RepeatCount**: How many times to repeat (up to 256, covering over 21 years!)
+  
+  ## The Technical Deep Dive
+  
+  Let's explore the critical timing calculations that make this system reliable:
+  
+  ### Understanding Xahau Time
+  
+  Xahau uses its own epoch, starting 946,684,800 seconds after Unix epoch. This means we need to convert between Unix timestamps and Xahau time:
+  
+  ```
+  const RIPPLED_EPOCH_OFFSET = 946684800;
+  const xahauTime = unixTime - RIPPLED_EPOCH_OFFSET;
+  ```
+  
+  Enter fullscreen modeExit fullscreen mode
+  
+  ### The Safety Margin Philosophy
+  
+  The official reward delay is 2,599,980 seconds (30 days, 2 hours, 13 minutes). However, our system adds a 1-hour safety margin, resulting in 2,603,580 seconds. Why?
+  
+  Network conditions, ledger closing times, and transaction queues can introduce minor delays. By adding this buffer, we ensure our automated claims always execute successfully rather than failing due to timing edge cases. (Feel free to remove or edit it)
+  
+  ### Calculating Next Claim Time
+  
+  The `checkAccount.js` script performs sophisticated calculations:
+  
+  1. Checks current RewardTime from account data
+  2. Adds the delay period (2,599,980 seconds)
+  3. Converts to human-readable format
+  4. Suggests both exact time and safety-margin time
+  
+  This dual approach lets users choose between aggressive timing (exact) or conservative timing (with 1 hour buffer).
+  
+  ## Real-World Implementation
+  
+  Let me walk you through setting up automated claiming for a real account:
+  
+  ### Step 1: Initial Setup
+  
+  First, clone the repository and install dependencies:
+  
+  ```
+  git clone https://github.com/Ekiserrepe/cron-claimreward-xahau.git
+  cd cron-claimreward-xahau
+  npm install
+  ```
+  
+  Enter fullscreen modeExit fullscreen mode
+  
+  ### Step 2: Configure Your Account
+  
+  Edit the seed in `accountSet.js` and run:
+  
+  ```
+  const xahau = require('xahau');
+  const { derive, utils, signAndSubmit } = require("xrpl-accountlib");
+  
+  const seed = 'sYourSeedHere'; // Replace with your actual seed, get one at https://xahau-test.net/
+  const network = "wss://xahau-test.net";
+  
+  async function setAccountFlag() {
+    const client = new xahau.Client(network);
+    const account = derive.familySeed(seed, { algorithm: "secp256k1" });
+    console.log(`Account: ${account.address}`);
+  
+    try {
+      await client.connect();
+      console.log('Connected to Xahau');
+  
+      const networkInfo = await utils.txNetworkAndAccountValues(network, account);
+  
+      const prepared = {
+        "TransactionType": "AccountSet",
+        "Account": account.address,
+        "SetFlag": 11, // asfTshCollect - Enable Transaction Signature Hook Collection
+        ...networkInfo.txValues,
+      };
+  
+      console.log("Prepared AccountSet transaction:", JSON.stringify(prepared, null, 2));
+  
+      const tx = await signAndSubmit(prepared, network, account);
+      console.log("Transaction result:", JSON.stringify(tx, null, 2));
+  
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      await client.disconnect();
+      console.log('Disconnected from Xahau');
+    }
+  }
+  
+  setAccountFlag();
+  ```
+  
+  Enter fullscreen modeExit fullscreen mode
+  
+  This prepares your account for Hook installation. Setting the flag 11 'asfTshCollect' allows you to interact with cron transactions and hook executions.
+  
+  ### Step 3: Install the Hook
+  
+  Deploy the ClaimReward Hook to your account:
+  
+  ```
+  const xahau = require('xahau');
+  const { derive, utils, signAndSubmit } = require("xrpl-accountlib");
+  
+  const seed = 'sYourSeedHere'; // Replace with your actual seed, get one at https://xahau-test.net/
+  const network = "wss://xahau-test.net";
+  
+  async function installHook() {
+    const client = new xahau.Client(network);
+    const account = derive.familySeed(seed, { algorithm: "secp256k1" });
+    console.log(`Account: ${account.address}`);
+  
+    try {
+      await client.connect();
+      console.log('Connected to Xahau');
+  
+      const networkInfo = await utils.txNetworkAndAccountValues(network, account);
+  
+      const prepared = {
+        "TransactionType": "SetHook",
+        "Account": account.address,
+        "Hooks": [\
+          {\
+            "Hook": {\
+              "HookHash": "805351CE26FB79DA00647CEFED502F7E15C2ACCCE254F11DEFEDDCE241F8E9CA",\
+              "HookNamespace": "0000000000000000000000000000000000000000000000000000000000000000",\
+              "HookOn": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFFFBFFFFF",\
+              "HookCanEmit": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBFFFFFFFFFFFFFFFFFFBFFFFF", //Can emit ClaimReward\
+              "Flags": 4\
+            }\
+          }\
+        ],
+        ...networkInfo.txValues,
+      };
+  
+      console.log("Prepared SetHook transaction:", JSON.stringify(prepared, null, 2));
+  
+      const tx = await signAndSubmit(prepared, network, account);
+      console.log("Transaction result:", JSON.stringify(tx, null, 2));
+  
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      await client.disconnect();
+      console.log('Disconnected from Xahau');
+    }
+  }
+  
+  installHook();
+  ```
+  
+  Enter fullscreen modeExit fullscreen mode
+  
+  The Hook is now ready to execute claims when triggered. The Flag 4 is needed to allow the cron transaction to trigger the hook execution.
+  
+  ### Step 4: Analyze Your Account
+  
+  Run the account checker to get precise timing information:
+  
+  ```
+  const { Client } = require('xahau');
+  
+  // Constants
+  const RIPPLED_EPOCH_OFFSET = 946684800;
+  const REWARD_DELAY_SECONDS = 2599980; // 30 days, 2 hours, 13 minutes
+  
+  async function checkAccount() {
+    const client = new Client('wss://xahau-test.net');
+    const address = 'yourAddress';
+  
+    try {
+      await client.connect();
+      console.log('Connected to Xahau Testnet\n');
+  
+      const { result } = await client.request({
+        command: 'account_info',
+        account: address,
+        ledger_index: 'validated'
+      });
+  
+      console.log('=== ACCOUNT INFO ===\n');
+      console.log('Address:', address);
+      console.log('Balance:', result.account_data.Balance, 'drops');
+      console.log('Balance (XAH):', (parseInt(result.account_data.Balance) / 1000000).toFixed(6), 'XAH');
+      console.log('Sequence:', result.account_data.Sequence);
+      console.log('RewardTime:', result.account_data.RewardTime || 'Not set (not opted in)');
+      console.log('RewardLgrFirst:', result.account_data.RewardLgrFirst || 'Not set');
+      console.log('RewardLgrLast:', result.account_data.RewardLgrLast || 'Not set');
+      console.log('\nAccount exists:', true);
+      console.log('Is opted in to rewards:', !!result.account_data.RewardTime);
+  
+      // Calculate next claim time if opted in
+      if (result.account_data.RewardTime) {
+        const rewardTime = parseInt(result.account_data.RewardTime);
+        const nextClaimTime = rewardTime + REWARD_DELAY_SECONDS;
+        const nextClaimDate = new Date((nextClaimTime + RIPPLED_EPOCH_OFFSET) * 1000);
+  
+        // Calculate with 1 hour safety margin
+        const nextClaimTimeSafe = nextClaimTime + 3600; // +1 hour (3600 seconds)
+        const nextClaimDateSafe = new Date((nextClaimTimeSafe + RIPPLED_EPOCH_OFFSET) * 1000);
+  
+        // Format date as YYYY/MM/DD, time as 12-hour format
+        const formatDate = (date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const timeString = date.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+          });
+          return `${year}/${month}/${day}, ${timeString}`;
+        };
+  
+        console.log('\n=== NEXT CLAIM INFO ===\n');
+        console.log('Next Claim Date:', formatDate(nextClaimDate));
+        console.log('\n⭐ For cronSet.js:');
+        console.log('StartTime:', nextClaimTime);
+        console.log('StartTime + 1 hour (for safety):', nextClaimTimeSafe, '-', formatDate(nextClaimDateSafe));
+  
+        // Calculate DelaySeconds for 30 days, 3 hours, 13 minutes
+        const delaySeconds = (30 * 24 * 60 * 60) + (3 * 60 * 60) + (13 * 60);
+        console.log('\nDelaySeconds (30d 3h 13m):', delaySeconds);
+      }
+  
+    } catch (error) {
+      console.error('Error:', error.message);
+    } finally {
+      await client.disconnect();
+    }
+  }
+  
+  checkAccount();
+  ```
+  
+  Enter fullscreen modeExit fullscreen mode
+  
+  You'll see output like:
+  
+  ```
+  === NEXT CLAIM INFO ===
+  Next Claim Date: 2025/12/21, 1:09:41 PM
+  ⭐ For cronSet.js:
+  StartTime: 819634181
+  StartTime + 1 hour (for safety): 819637781
+  ```
+  
+  Enter fullscreen modeExit fullscreen mode
+  
+  ### Step 5: Schedule Automation
+  
+  Edit `cronSet.js` with the calculated StartTime from last code (or 0 if its the first time you are opt-in your rewards) and run:
+  
+  ```
+  const xahau = require('xahau');
+  const { derive, utils, signAndSubmit } = require("xrpl-accountlib");
+  
+  const seed = 'sYourSeedHere'; // Replace with your seed
+  const network = "wss://xahau-test.net";
+  
+  async function createCronSet() {
+    const client = new xahau.Client(network);
+    const account = derive.familySeed(seed, { algorithm: "secp256k1" });
+    console.log(`Account: ${account.address}`);
+  
+    try {
+      await client.connect();
+      console.log('Connected to Xahau');
+  
+      const networkInfo = await utils.txNetworkAndAccountValues(network, account);
+  
+      // Convert current time to Ripple Epoch (seconds since January 1, 2000 00:00 UTC)
+      const RIPPLE_EPOCH_OFFSET = 946684800;
+      const currentUnixTime = Math.floor(Date.now() / 1000);
+      const startTimeRippleEpoch = currentUnixTime - RIPPLE_EPOCH_OFFSET + 60; // Start in 1 minute
+  
+      const prepared = {
+        "TransactionType": "CronSet",
+        "Account": account.address, // Your Hook address
+        "StartTime": 0,//Check checkAccount.js to get your StartTime number if you already opt-in, Or use 0 for immediate start if you didn't top-in yet.
+        "RepeatCount": 256, // Max number of times to repeat the task
+        "DelaySeconds": 2603580, // 30 days, 3 hours, 13 minutes (Regular claim interval + 1 hour safety margin)
+        ...networkInfo.txValues,
+      };
+  
+      console.log("Prepared CronSet transaction:", JSON.stringify(prepared, null, 2));
+  
+      const tx = await signAndSubmit(prepared, network, account);
+      console.log("Transaction result:", JSON.stringify(tx, null, 2));
+  
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      await client.disconnect();
+      console.log('Disconnected from Xahau');
+    }
+  }
+  
+  createCronSet();
+  ```
+  
+  Enter fullscreen modeExit fullscreen mode
+  
+  Congratulations! Your rewards will now be claimed automatically.
+  
+  ## Advanced Considerations
+  
+  ### Handling First-Time Users
+  
+  If you've never opted into rewards before, use `StartTime: 0` in your CronSet configuration. This triggers an immediate first claim and starts your reward cycle.
+  
+  ### Choosing RepeatCount Wisely
+  
+  Each repeat covers approximately 30 days. Here's a quick reference:
+  
+  - 12 repeats = ~1 year of automation
+  - 24 repeats = ~2 years
+  - 256 repeats (maximum) = ~21 years
+  
+  Consider your long-term commitment to the network when choosing this value.
+  
+  ### Network Selection
+  
+  Always test on testnet first:
+  
+  ```
+  const network = 'wss://xahau-test.net'; // Testing
+  // const network = 'wss://xahau.network'; // Production
+  ```
+  
+  Enter fullscreen modeExit fullscreen mode
+  
+  ### Monitoring Your Automation
+  
+  Even with automation, periodic checks are wise:
+  
+  1. Verify CronSet transactions are executing
+  2. Check account balance for fees
+  3. Monitor Hook execution logs
+  4. Validate reward accumulation
+  
+  ## The Business Layer Perspective
+  
+  This automated reward system exemplifies what I discussed in my previous article about building business layers on Xahau. By abstracting the complexity of reward claiming into an automated system, we're creating infrastructure that enables:
+  
+  - **Portfolio Management**: Manage multiple accounts efficiently
+  - **Institutional Adoption**: Enterprises can automate treasury operations
+  - **User Experience**: Remove friction from reward claiming
+  - **Scalability**: Handle hundreds of accounts without manual intervention
+  
+  ## Security Considerations
+  
+  ### Hook Verification
+  
+  The provided Hook hash is public and verifiable. If you prefer maximum security, compile the `claimReward.c` file yourself and verify the hash matches or create a new one!
+  
+  ### Transaction Fees
+  
+  Ensure your account maintains sufficient XAH balance for:
+  
+  - CronSet execution fees
+  - ClaimReward transaction fees
+  
+  ## Troubleshooting Common Issues
+  
+  ### "Account not eligible for rewards yet"
+  
+  Solution: Wait for the exact RewardTime + delay period, or use the safety margin suggestion.
+  
+  ### "Insufficient balance for fees"
+  
+  Solution: Maintain at least 10 XAH for fee reserves.
+  
+  ### "Hook is not being triggered"
+  
+  Solution: Ensure account is properly configured with `accountSet.js` first and you installed your hook with proper HookOn and HookCanEmit and Flags values.
+  
+  ## The Bigger Picture
+  
+  This automated reward system represents more than just convenience, it's a glimpse into the future of blockchain automation. By combining Hooks (smart contracts) with CronSet (scheduled execution), we're creating autonomous financial systems that operate without human intervention.
+  
+  Imagine scaling this concept:
+  
+  - Automated DeFi strategies
+  - Scheduled payment distributions
+  - Autonomous treasury management
+  - Self-executing compliance operations
+  
+  The infrastructure we're building today lays the foundation for tomorrow's decentralized autonomous organizations.
+  
+  ## Future Enhancements
+  
+  While the current system is production-ready, several enhancements could add value:
+  
+  1. **Multi-account Management**: Handle multiple accounts from a single interface
+  2. **Notification System**: Alert users when claims execute
+  3. **Analytics Dashboard**: Track reward accumulation over time
+  4. **Dynamic Optimization**: Adjust timing based on network conditions
+  5. **Integration APIs**: Connect with existing portfolio management tools
+  
+  ## Conclusion
+  
+  Automating reward claims on Xahau isn't just about saving time, it's about building reliable, scalable infrastructure for the future of finance solutions. By combining Hooks and CronSet transactions, we've created a system that runs autonomously for years, ensuring you never miss a reward claim again.
+  
+  The code is open source and available at [github.com/Ekiserrepe/cron-claimreward-xahau](https://github.com/Ekiserrepe/cron-claimreward-xahau). I encourage you to explore it, test it on testnet, and create new improvements.
+  
+  Remember: the best automation is the one you set up once and forget about. With this system, your Xahau rewards practically claim themselves.
+  
+  ## Acknowledgments
+  
+  Special thanks to [Denis Angell](https://x.com/angell_denis) and [Satish](https://x.com/Satish_nl) from XRPL Labs for their pioneering work on Hooks and assistance in developing this solution.
+  
+  [![profile](https://media2.dev.to/dynamic/image/width=64,height=64,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.amazonaws.com%2Fuploads%2Forganization%2Fprofile_image%2F3774%2F99e0624e-6fb6-4460-819d-3a0d967519cb.webp)\\
+  Sentry](https://dev.to/sentry) Promoted
+  
+  Dropdown menu
+  
+  - [What's a billboard?](https://dev.to/billboards)
+  - [Manage preferences](https://dev.to/settings/customization#sponsors)
+  
+  * * *
+  
+  - [Report billboard](https://dev.to/report-abuse?billboard=262857)
+  
+  [![Sentry image](https://media2.dev.to/dynamic/image/width=775%2Cheight=%2Cfit=scale-down%2Cgravity=auto%2Cformat=auto/https%3A%2F%2Fi.imgur.com%2FwQXpbvv.png)](https://sentry.io/welcome/?utm_source=devto&utm_medium=paid-community&utm_campaign=brand-fy27q1-quitbuggin&utm_content=static-ad-qb-peace-trysentry&bb=262857)
+  
+  ## [TIL I don’t have to bug out](https://sentry.io/welcome/?utm_source=devto&utm_medium=paid-community&utm_campaign=brand-fy27q1-quitbuggin&utm_content=static-ad-qb-peace-trysentry&bb=262857)
+  
+  [Read more →](https://sentry.io/welcome/?utm_source=devto&utm_medium=paid-community&utm_campaign=brand-fy27q1-quitbuggin&utm_content=static-ad-qb-peace-trysentry&bb=262857)
+  
+  Read More
+  
+  
+  ![pic](https://media2.dev.to/dynamic/image/width=256,height=,fit=scale-down,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.amazonaws.com%2Fuploads%2Farticles%2F8j7kvp660rqzt99zui8e.png)
+  
+  [Create template](https://dev.to/settings/response-templates)
+  
+  Templates let you quickly answer FAQs or store snippets for re-use.
+  
+  SubmitPreview [Dismiss](https://dev.to/404.html)
+  
+  Are you sure you want to hide this comment? It will become hidden in your post, but will still be visible via the comment's [permalink](https://dev.to/ekiserrepe/learning-xahau-automating-reward-claims-with-hooks-and-cronset-n4k#).
+  
+  
+  Hide child comments as well
+  
+  Confirm
+  
+  
+  For further actions, you may consider blocking this person and/or [reporting abuse](https://dev.to/report-abuse)
+  
+  👋 Kindness is contagious
+  
+  Dropdown menu
+  
+  - [What's a billboard?](https://dev.to/billboards)
+  - [Manage preferences](https://dev.to/settings/customization#sponsors)
+  
+  * * *
+  
+  - [Report billboard](https://dev.to/report-abuse?billboard=239338)
+  
+  x
+  
+  Explore this practical breakdown on DEV’s open platform, where developers from every background come together to push boundaries. **No matter your experience,** your viewpoint enriches the conversation.
+  
+  Dropping a simple “thank you” or question in the comments goes a long way in supporting authors—your feedback helps ideas evolve.
+  
+  At DEV, **shared discovery drives progress** and builds lasting bonds. If this post resonated, a quick nod of appreciation can make all the difference.
+  
+  ## [Okay](https://dev.to/enter?state=new-user&bb=239338)
+  
+  ![DEV Community](https://media2.dev.to/dynamic/image/width=190,height=,fit=scale-down,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.amazonaws.com%2Fuploads%2Farticles%2F8j7kvp660rqzt99zui8e.png)
+  
+  We're a place where coders share, stay up-to-date and grow their careers.
+  
+  
+  [Log in](https://dev.to/enter?signup_subforem=1) [Create account](https://dev.to/enter?signup_subforem=1&state=new-user)
+  
+  ![](https://assets.dev.to/assets/sparkle-heart-5f9bee3767e18deb1bb725290cb151c25234768a0e9a2bd39370c382d02920cf.svg)![](https://assets.dev.to/assets/multi-unicorn-b44d6f8c23cdd00964192bedc38af3e82463978aa611b4365bd33a0f1f4f3e97.svg)![](https://assets.dev.to/assets/exploding-head-daceb38d627e6ae9b730f36a1e390fca556a4289d5a41abb2c35068ad3e2c4b5.svg)![](https://assets.dev.to/assets/raised-hands-74b2099fd66a39f2d7eed9305ee0f4553df0eb7b4f11b01b6b1b499973048fe5.svg)![](https://assets.dev.to/assets/fire-f60e7a582391810302117f987b22a8ef04a2fe0df7e3258a5f49332df1cec71e.svg)
+  --- End Content ---
+
+How to set cron to claim rewards on Xahau - GitHub
+  URL: https://github.com/Ekiserrepe/cron-claimreward-xahau
+  1. Configure Account Settings (AccountSet) · 2. Install ClaimReward Hook · 3. Set Up Automated Claims with CronSet.
+  Category: github
+
+  --- Content ---
+  [Skip to content](https://github.com/Ekiserrepe/cron-claimreward-xahau#start-of-content)
+  
+  You signed in with another tab or window. [Reload](https://github.com/Ekiserrepe/cron-claimreward-xahau) to refresh your session.You signed out in another tab or window. [Reload](https://github.com/Ekiserrepe/cron-claimreward-xahau) to refresh your session.You switched accounts on another tab or window. [Reload](https://github.com/Ekiserrepe/cron-claimreward-xahau) to refresh your session.Dismiss alert
+  
+  [Ekiserrepe](https://github.com/Ekiserrepe)/ **[cron-claimreward-xahau](https://github.com/Ekiserrepe/cron-claimreward-xahau)** Public
+  
+  - [Notifications](https://github.com/login?return_to=%2FEkiserrepe%2Fcron-claimreward-xahau) You must be signed in to change notification settings
+  - [Fork\\
+  1](https://github.com/login?return_to=%2FEkiserrepe%2Fcron-claimreward-xahau)
+  - [Star\\
+  0](https://github.com/login?return_to=%2FEkiserrepe%2Fcron-claimreward-xahau)
+  
+  
+  main
+  
+  [Branches](https://github.com/Ekiserrepe/cron-claimreward-xahau/branches) [Tags](https://github.com/Ekiserrepe/cron-claimreward-xahau/tags)
+  
+  [Go to Branches page](https://github.com/Ekiserrepe/cron-claimreward-xahau/branches)[Go to Tags page](https://github.com/Ekiserrepe/cron-claimreward-xahau/tags)
+  
+  Go to file
+  
+  Code
+  
+  Open more actions menu
+  
+  ## Folders and files
+  
+  | Name | Name | Last commit message | Last commit date |
+  | --- | --- | --- | --- |
+  | ## Latest commit<br>## History<br>[5 Commits](https://github.com/Ekiserrepe/cron-claimreward-xahau/commits/main/) <br>[View commit history for this file.](https://github.com/Ekiserrepe/cron-claimreward-xahau/commits/main/) 5 Commits |
+  | [.gitignore](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/.gitignore ".gitignore") | [.gitignore](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/.gitignore ".gitignore") |  |  |
+  | [README.md](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/README.md "README.md") | [README.md](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/README.md "README.md") |  |  |
+  | [accountSet.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/accountSet.js "accountSet.js") | [accountSet.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/accountSet.js "accountSet.js") |  |  |
+  | [checkAccount.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/checkAccount.js "checkAccount.js") | [checkAccount.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/checkAccount.js "checkAccount.js") |  |  |
+  | [claimReward.c](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/claimReward.c "claimReward.c") | [claimReward.c](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/claimReward.c "claimReward.c") |  |  |
+  | [clearAccountFlag.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/clearAccountFlag.js "clearAccountFlag.js") | [clearAccountFlag.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/clearAccountFlag.js "clearAccountFlag.js") |  |  |
+  | [cronSet.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/cronSet.js "cronSet.js") | [cronSet.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/cronSet.js "cronSet.js") |  |  |
+  | [installHook.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/installHook.js "installHook.js") | [installHook.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/installHook.js "installHook.js") |  |  |
+  | [package-lock.json](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/package-lock.json "package-lock.json") | [package-lock.json](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/package-lock.json "package-lock.json") |  |  |
+  | [package.json](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/package.json "package.json") | [package.json](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/package.json "package.json") |  |  |
+  | [uninstallCronSet.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/uninstallCronSet.js "uninstallCronSet.js") | [uninstallCronSet.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/uninstallCronSet.js "uninstallCronSet.js") |  |  |
+  | [uninstallHook.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/uninstallHook.js "uninstallHook.js") | [uninstallHook.js](https://github.com/Ekiserrepe/cron-claimreward-xahau/blob/main/uninstallHook.js "uninstallHook.js") |  |  |
+  | View all files |
+  
+  ## Repository files navigation
+  
+  # Xahau ClaimReward Automation with CronSet
+  
+  [Permalink: Xahau ClaimReward Automation with CronSet](https://github.com/Ekiserrepe/cron-claimreward-xahau#xahau-claimreward-automation-with-cronset)
+  
+  Automated system for claiming Xahau rewards using Hooks and CronSet transactions. This project provides tools to calculate, schedule, and automate ClaimReward transactions on the Xahau network.
+  
+  ## ✨ Features
+  
+  [Permalink: ✨ Features](https://github.com/Ekiserrepe/cron-claimreward-xahau#-features)
+  
+  - 📊 Check account reward status and balance
+  - 🧮 Calculate next claim time automatically
+  - ⏰ Schedule automated claims using CronSet
+  - 🪝 Install Hooks for automated claim execution
+  - 🛡️ Safety margin calculations for timing precision
+  
+  ## 📦 Prerequisites
+  
+  [Permalink: 📦 Prerequisites](https://github.com/Ekiserrepe/cron-claimreward-xahau#-prerequisites)
+  
+  - Node.js >= 14.0.0
+  - npm or yarn
+  - Xahau account with sufficient balance
+  - Account seed (for transactions)
+  
+  ## 🚀 Installation
+  
+  [Permalink: 🚀 Installation](https://github.com/Ekiserrepe/cron-claimreward-xahau#-installation)
+  
+  ```
+  # Clone the repository
+  git clone https://github.com/Ekiserrepe/cron-claimreward-xahau.git
+  cd cron-claimreward-xahau
+  
+  # Install dependencies
+  npm install
+  
+  # Or using yarn
+  yarn install
+  ```
+  
+  ## 📁 Project Structure
+  
+  [Permalink: 📁 Project Structure](https://github.com/Ekiserrepe/cron-claimreward-xahau#-project-structure)
+  
+  ```
+  cron-claimreward-xahau/
+  ├── accountSet.js          # Configure account settings
+  ├── checkAccount.js        # Check account info and calculate next claim
+  ├── cronSet.js             # Set up automated CronSet transaction
+  ├── installHook.js         # Install ClaimReward Hook
+  ├── uninstallCronSet.js   # Remove existing CronSet schedule
+  ├── uninstallHook.js      # Remove installed ClaimReward Hook
+  ├── clearAccountFlag.js   # Clear the AccountSet hook flag
+  ├── claimReward.c          # C Hook for automated claiming
+  ├── package.json           # Project dependencies
+  └── README.md              # This file
+  ```
+  
+  ## 🎯 Usage
+  
+  [Permalink: 🎯 Usage](https://github.com/Ekiserrepe/cron-claimreward-xahau#-usage)
+  
+  ### Setup Workflow
+  
+  [Permalink: Setup Workflow](https://github.com/Ekiserrepe/cron-claimreward-xahau#setup-workflow)
+  
+  Follow these steps in order to set up automated rewards claiming:
+  
+  ### 1\. Configure Account Settings (AccountSet)
+  
+  [Permalink: 1. Configure Account Settings (AccountSet)](https://github.com/Ekiserrepe/cron-claimreward-xahau#1-configure-account-settings-accountset)
+  
+  First, configure your account settings:
+  
+  ```
+  npm run accountset
+  # or
+  node accountSet.js
+  ```
+  
+  This sets up basic account configuration on Xahau.
+  
+  ### 2\. Install ClaimReward Hook
+  
+  [Permalink: 2. Install ClaimReward Hook](https://github.com/Ekiserrepe/cron-claimreward-xahau#2-install-claimreward-hook)
+  
+  Install the Hook that will handle automated claiming:
+  
+  ```
+  npm run installhook
+  # or
+  node installHook.js
+  ```
+  
+  This deploys the ClaimReward Hook (claimReward.c) to your account. The hookhash available in both networks is '805351CE26FB79DA00647CEFED502F7E15C2ACCCE254F11DEFEDDCE241F8E9CA'. If you don't trust it, you can build your own from claimReward.c
+  
+  ### 3\. Set Up Automated Claims with CronSet
+  
+  [Permalink: 3. Set Up Automated Claims with CronSet](https://github.com/Ekiserrepe/cron-claimreward-xahau#3-set-up-automated-claims-with-cronset)
+  
+  Set up the automated schedule.
+  
+  First, check your account to get the correct StartTime:
+  
+  ```
+  node checkAccount.js
+  ```
+  
+  **Output:**
+  
+  ```
+  === ACCOUNT INFO ===
+  
+  Address: rYourAddress...
+  Balance: 999593284 drops
+  Balance (XAH): 999.593284 XAH
+  Sequence: 817032697
+  RewardTime: 817034201
+  RewardLgrFirst: 3776333
+  RewardLgrLast: 3777131
+  
+  Account exists: true
+  Is opted in to rewards: true
+  
+  === NEXT CLAIM INFO ===
+  
+  Next Claim Date: 2025/12/21, 1:09:41 PM
+  
+  ⭐ For cronSet.js:
+  StartTime: 819634181
+  StartTime + 1 hour (for safety): 819637781 - 2025/12/21, 2:09:41 PM
+  
+  DelaySeconds (30d 3h 13m): 2603580
+  ```
+  
+  Then configure and run CronSet:
+  
+  ```
+  # Edit cronSet.js first:
+  # - Set your seed
+  # - Set StartTime from checkAccount.js output (or 0 if first time, never opt-in before)
+  # - Set DelaySeconds (use 2603580 for 30d 3h 13m)
+  # - Set RepeatCount (number of times to repeat, 256 is the max)
+  
+  npm run cronset
+  # or
+  node cronSet.js
+  ```
+  
+  If you need to remove the automation later:
+  
+  ```
+  npm run uninstallcron
+  # or
+  node uninstallCronSet.js
+  
+  npm run uninstallhook
+  # or
+  node uninstallHook.js
+  
+  npm run clearflag
+  # or
+  node clearAccountFlag.js
+  ```
+  
+  **StartTime Options:**
+  
+  - **If first opt-in**: `StartTime: 0` (if you never opt-in before)
+  - **If already claimed before**: Use the calculated `StartTime` from `checkAccount.js`
+  - **For safety**: Use `StartTime + 1 hour` value from `checkAccount.js`
+  
+  ## ⚙️ Configuration
+  
+  [Permalink: ⚙️ Configuration](https://github.com/Ekiserrepe/cron-claimreward-xahau#%EF%B8%8F-configuration)
+  
+  ### Environment Setup
+  
+  [Permalink: Environment Setup](https://github.com/Ekiserrepe/cron-claimreward-xahau#environment-setup)
+  
+  Edit the relevant JavaScript files and configure:
+  
+  ```
+  const seed = 'sYourSeedHere';           // Your account seed
+  const network = 'wss://xahau-test.net'; // Testnet
+  // const network = 'wss://xahau.network';  // Mainnet
+  ```
+  
+  ### CronSet Configuration
+  
+  [Permalink: CronSet Configuration](https://github.com/Ekiserrepe/cron-claimreward-xahau#cronset-configuration)
+  
+  In `cronSet.js`, configure these parameters:
+  
+  ```
+  {
+    "TransactionType": "CronSet",
+    "Account": "rYourAddress",
+    "StartTime": 819637781,        // From checkAccount.js (with safety margin)
+    "RepeatCount": 12,             // Number of claims (e.g., 12 for 1 year, 256 is the max number allowed)
+    "DelaySeconds": 2603580,       // 30 days, 3 hours, 13 minutes
+  }
+  ```
+  
+  ## 📊 Important Constants
+  
+  [Permalink: 📊 Important Constants](https://github.com/Ekiserrepe/cron-claimreward-xahau#-important-constants)
+  
+  ### Time Constants
+  
+  [Permalink: Time Constants](https://github.com/Ekiserrepe/cron-claimreward-xahau#time-constants)
+  
+  - **RIPPLED\_EPOCH\_OFFSET**: `946684800` seconds (difference between Unix Epoch and Rippled Epoch)
+  - **REWARD\_DELAY\_SECONDS**: `2599980` seconds (30 days, 2 hours, 13 minutes)
+  - **RECOMMENDED\_DELAY**: `2603580` seconds (30 days, 3 hours, 13 minutes - with 1 hour safety margin)
+  
+  ### Genesis Issuer
+  
+  [Permalink: Genesis Issuer](https://github.com/Ekiserrepe/cron-claimreward-xahau#genesis-issuer)
+  
+  - **Address**: `rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh`
+  
+  ## 🔧 How It Works
+  
+  [Permalink: 🔧 How It Works](https://github.com/Ekiserrepe/cron-claimreward-xahau#-how-it-works)
+  
+  ### Xahau Rewards System
+  
+  [Permalink: Xahau Rewards System](https://github.com/Ekiserrepe/cron-claimreward-xahau#xahau-rewards-system)
+  
+  1. **Opt-In**: Account must submit an initial `ClaimReward` transaction
+  2. **Claiming**: After opt-in, rewards can be claimed every ~30 days
+  3. **Timing**: Exact delay is 30 days, 2 hours, 13 minutes (2,599,980 seconds)
+  4. **Automation**: Use CronSet to schedule automatic claims
+  
+  ### Workflow
+  
+  [Permalink: Workflow](https://github.com/Ekiserrepe/cron-claimreward-xahau#workflow)
+  
+  ```
+  1. Configure Account (accountSet.js)
+     ↓
+  2. Install Hook (installHook.js)
+     ↓
+  3. First Claim / Opt-In (Hook triggers automatically or manual claim)
+     ↓
+  4. Check Account Status (checkAccount.js)
+     ↓
+  5. Calculate Next Claim Time (automatically shown in checkAccount.js)
+     ↓
+  6. Configure CronSet with StartTime + DelaySeconds (cronSet.js)
+     ↓
+  7. Submit CronSet Transaction
+     ↓
+  8. Automated Claims Execute on Schedule
+  ```
+  
+  **Important Notes:**
+  
+  - **First time users**: Use `StartTime: 0` in CronSet for immediate first claim
+  - **Existing claimers**: Use calculated `StartTime` from `checkAccount.js`
+  - **Safety margin**: Add 1 hour to StartTime (use the "safety" value from checkAccount.js)
+  
+  ## 🛡️ Security Considerations
+  
+  [Permalink: 🛡️ Security Considerations](https://github.com/Ekiserrepe/cron-claimreward-xahau#%EF%B8%8F-security-considerations)
+  
+  ### Private Key Management
+  
+  [Permalink: Private Key Management](https://github.com/Ekiserrepe/cron-claimreward-xahau#private-key-management)
+  
+  ⚠️ **IMPORTANT**: Never commit your seed/private keys to version control
+  
+  ### Recommended Practices
+  
+  [Permalink: Recommended Practices](https://github.com/Ekiserrepe/cron-claimreward-xahau#recommended-practices)
+  
+  1. **Test on Testnet First**: Always test with `wss://xahau-test.net`
+  2. **Verify Transactions**: Check transaction results before proceeding
+  3. **Use Safety Margins**: Add 1 hour to StartTime to ensure claim is available
+  4. **Monitor Execution**: Check that CronSet transactions execute successfully
+  5. **XAH balance**: Add enough XAH in your account to be able to run all the transactions you are expecting.
+  
+  ### Network Selection
+  
+  [Permalink: Network Selection](https://github.com/Ekiserrepe/cron-claimreward-xahau#network-selection)
+  
+  ```
+  // Testnet (for testing)
+  const network = 'wss://xahau-test.net';;
+  
+  // Mainnet (for production)
+  const network = 'wss://xahau.network';
+  ```
+  
+  ## 📚 Resources
+  
+  [Permalink: 📚 Resources](https://github.com/Ekiserrepe/cron-claimreward-xahau#-resources)
+  
+  - [Xahau Documentation](https://xahau.network/docs)
+  - [Xahau Hooks Documentation](https://xahau.network/docs/hooks)
+  
+  ## ⚠️ Special Thanks
+  
+  [Permalink: ⚠️ Special Thanks](https://github.com/Ekiserrepe/cron-claimreward-xahau#%EF%B8%8F-special-thanks)
+  
+  Denis Angell and Satish from XRPL Labs for the original hook code and assitance.
+  
+  ## About
+  
+  How to set cron to claim rewards on Xahau
+  
+  
+  ### Resources
+  
+  [Readme](https://github.com/Ekiserrepe/cron-claimreward-xahau#readme-ov-file)
+  
+  ### Uh oh!
+  
+  There was an error while loading. [Please reload this page](https://github.com/Ekiserrepe/cron-claimreward-xahau).
+  
+  [Activity](https://github.com/Ekiserrepe/cron-claimreward-xahau/activity)
+  
+  ### Stars
+  
+  [**0**\\
+  stars](https://github.com/Ekiserrepe/cron-claimreward-xahau/stargazers)
+  
+  ### Watchers
+  
+  [**0**\\
+  watching](https://github.com/Ekiserrepe/cron-claimreward-xahau/watchers)
+  
+  ### Forks
+  
+  [**1**\\
+  fork](https://github.com/Ekiserrepe/cron-claimreward-xahau/forks)
+  
+  [Report repository](https://github.com/contact/report-content?content_url=https%3A%2F%2Fgithub.com%2FEkiserrepe%2Fcron-claimreward-xahau&report=Ekiserrepe+%28user%29)
+  
+  ## [Releases](https://github.com/Ekiserrepe/cron-claimreward-xahau/releases)
+  
+  No releases published
+  
+  ## [Packages\  0](https://github.com/users/Ekiserrepe/packages?repo_name=cron-claimreward-xahau)
+  
+  ### Uh oh!
+  
+  There was an error while loading. [Please reload this page](https://github.com/Ekiserrepe/cron-claimreward-xahau).
+  
+  ## [Contributors](https://github.com/Ekiserrepe/cron-claimreward-xahau/graphs/contributors)
+  
+  ### Uh oh!
+  
+  There was an error while loading. [Please reload this page](https://github.com/Ekiserrepe/cron-claimreward-xahau).
+  
+  ## Languages
+  
+  - [JavaScript75.0%](https://github.com/Ekiserrepe/cron-claimreward-xahau/search?l=javascript)
+  - [C25.0%](https://github.com/Ekiserrepe/cron-claimreward-xahau/search?l=c)
+  
+  You can’t perform that action at this time.
+  --- End Content ---
+
+Features - Xahau Network
+  URL: https://xahau.network/features/
+  These rewards are calculated based on account balance and distributed through a consensus-enforced mechanism, without requiring staking, delegation, or third- ...
+
+  --- Content ---
+  Protocol Layer
+  
+  Programmability
+  
+  ### Hooks: Account-Level  Smart Contract Logic
+  
+  Xahau introduces Hooks—a unique form of on-ledger smart contract logic that runs directly at the account level. Unlike smart contracts on most blockchains that require interacting with external contract addresses, Hooks are lightweight programs embedded inside user accounts themselves. These Hooks can automatically inspect, modify, or reject any transaction involving that account, without the need for explicit function calls.
+  
+  Because Hooks are executed inline and within consensus, they offer real-time programmability with minimal overhead. This allows for powerful use cases such as rejecting unauthorized token transfers, triggering actions on deposits, or implementing compliance logic—all without slowing down the network. Hooks represent a new security and programmability paradigm, making accounts active participants in transaction logic.
+  
+  ![Hooks smart contract logic illustration](https://xahau.network/_astro/hooks.iaoJxlI1.svg)
+  
+  Exchange
+  
+  #### Offers: Built-In Decentralized Exchange (DEX)
+  
+  Xahau includes a native Offers system, powering a built-in decentralized exchange on the ledger. Users can create Offer entries to buy or sell assets (such as tokens or issued currencies) directly on the network, and these offers are automatically matched by the protocol's order book.
+  
+  Unlike many blockchains that require smart contracts or external platforms for trading, Xahau's DEX is a first-class feature of the ledger. This on-ledger exchange offers fast settlement and low fees, making asset trading seamless for users and applications.
+  
+  Economics
+  
+  #### Low Fees with Fee Burning
+  
+  Xahau maintains consistently low transaction fees, with a built-in fee-burning model that reduces spam and rewards long-term network health. Every transaction pays a minimal fee in XAH, and a portion of that fee is permanently destroyed—creating a deflationary effect over time.
+  
+  This approach discourages network abuse while preserving accessibility, particularly for high-throughput or cost-sensitive applications. Unlike inflationary models or auction-style fees, Xahau provides predictability and economic alignment for all users.
+  
+  Infrastructure
+  
+  #### Fast, Green, and Scalable
+  
+  Built on a refined version of XRPL's consensus protocol, Xahau offers fast finality, low energy usage, and reliable scalability. Transactions confirm in seconds, with no mining and minimal hardware requirements. The result is a network that can serve real-world financial and enterprise use cases without compromising the environment or user experience.
+  
+  Xahau's architecture is ideal for global payment systems, tokenized asset platforms, or high-volume applications where performance and sustainability are non-negotiable.
+  
+  Financial Primitives
+  
+  Payments
+  
+  ### Payments:  Multi-Asset Transfers   & Channels
+  
+  The Payments functionality in Xahau is designed to facilitate fast, flexible transfer of value across the network. Uniquely, Xahau (like XRPL) supports multi-asset payments through a system of trust lines and issued currencies. Using a TrustSet transaction, two parties can establish a trust line to transact in a custom asset or IOU, enabling built-in support for multiple currencies or tokens without requiring smart contracts.
+  
+  This means businesses can issue stablecoins or tokens on Xahau and users can send or exchange them natively. The Payments suite also includes advanced features like Deposit Preauthorization, which lets an account whitelist who can send it funds, adding security against unwanted transactions.
+  
+  In addition, Xahau supports payment channels for scalability. Payment channels allow two parties to conduct rapid, high-volume transactions off-ledger and then settle the net result on the blockchain. With transactions like PaymentChannelCreate, Fund, and Claim, Xahau enables micropayments or streaming payments that are secured by the ledger but don't congest it.
+  
+  ![Global network infrastructure illustration](https://xahau.network/_astro/global.L52WQwFv.svg)
+  
+  Asset Control
+  
+  #### Token and Asset Control by Design
+  
+  Xahau gives issuers and users granular control over tokens and trustlines. Features like TrustSet, Clawback, Freeze, and Deposit Authorization allow full customization of how tokens can be used or received. Assets can be whitelisted, blocked, or burned, all enforced at the protocol level.
+  
+  This makes Xahau uniquely suited for regulated financial instruments, stablecoins, loyalty programs, or enterprise supply chains—any scenario where compliance, safety, and precision are critical.
+  
+  Economics
+  
+  #### Balance Rewards: Passive Yield Without Staking
+  
+  Xahau offers a Balance Reward system that lets accounts passively accumulate value simply by holding assets. These rewards are calculated based on account balance and distributed through a consensus-enforced mechanism, without requiring staking, delegation, or third-party contracts.
+  
+  The mechanism is powered by protocol-level logic and on-chain Hooks, ensuring rewards are automatic, fair, and sustainable. Unlike yield farming or staking systems on other blockchains, Xahau's reward model doesn't require users to lock assets or chase complex DeFi strategies—it works natively, with transparency and simplicity.
+  
+  Primitives
+  
+  #### Escrow: Conditional Transfers for Any Asset
+  
+  Xahau supports on-ledger escrow of both native and issued tokens, enabling secure conditional transfers for a broad range of business and financial use cases. Funds or tokens can be locked with time-based or condition-based release logic, enforced by the network itself.
+  
+  Whether you're building a milestone-based payment system, marketplace settlement, or trusted token distribution, Xahau's escrows offer a simple yet powerful tool—without the need for external smart contracts. Native support for both fungible and non-fungible assets in escrow makes this a uniquely versatile feature.
+  
+  Payments
+  
+  #### Remit: Native Cross-Account Transfers
+  
+  The Remit feature allows streamlined, multi-operation transactions between accounts—ideal for complex or high-volume payment flows. Instead of sending multiple separate instructions, a single Remit transaction can distribute value to multiple recipients or trigger multiple balance changes atomically.
+  
+  This improves efficiency and reliability, especially for payment processors, marketplaces, or applications that need to perform bundled operations. Because it's built into the protocol, Remit ensures predictable performance, low latency, and strong auditability.
+  
+  Payments
+  
+  #### Checks: Deferred Payment System
+  
+  Xahau supports Checks, a deferred payment system akin to writing digital checks on the blockchain. One party can issue a Check (promise of payment) that the intended recipient may cash at a later time or cancel if needed. This feature allows secure, flexible transactions—for example, a business can issue payment that the receiver will claim when certain conditions are met.
+  
+  The ledger has dedicated transactions for creating a check, cashing it, or canceling it. Few other platforms have this kind of native deferred payment instrument; Xahau's check system provides an extra layer of payment control, all enforced by the network's rules without requiring custom smart contracts.
+  
+  Governance & Identity
+  
+  Governance
+  
+  ### Governance Game:  Decentralized Coordination  with Purpose
+  
+  Xahau features a novel governance system backed by the Governance Game, a transparent, on-ledger mechanism for proposing, reviewing, and voting on amendments. Validator operators (Governors) participate directly in shaping the protocol, while also competing in a structured reward system based on accountability and engagement.
+  
+  This system ensures that protocol upgrades and policy decisions are open and participatory, not dictated by a centralized entity. It combines the benefits of structured enterprise coordination with the transparency and resilience of decentralized consensus. By gamifying governance in a secure and incentive-aligned way, Xahau sets a new standard for on-chain coordination.
+  
+  ![Consensus mechanism illustration](https://xahau.network/_astro/consensus.XxKsOKoI.svg)
+  
+  NFTs
+  
+  #### URITokens: Native NFTs on Xahau
+  
+  URITokens represent Xahau's approach to non-fungible tokens (NFTs), implemented as a native part of the ledger rather than via separate smart contracts. A URIToken is a first-class on-ledger object uniquely identified by the issuing account and a Uniform Resource Identifier (URI) that typically points to the token's metadata or content. Only one URIToken with a given URI can exist per account, ensuring true uniqueness for each digital asset.
+  
+  This built-in NFT standard means creators can mint, trade, or burn NFTs with simple transactions (e.g. URITokenMint, URITokenBuy, URITokenBurn) without deploying custom code. The issuer of a URIToken can even allow it to be destroyed (burned) by setting a flag, giving flexibility in how NFTs are managed. By integrating NFTs at the protocol level, Xahau makes issuing and managing digital collectibles or credentials more efficient and secure.
+  
+  ## Select your cookie preferences
+  
+  We use cookies to ensure you get the best experience on our website.
+  
+  Accept allReject all
+  
+  Manage preferences
+  
+  [Privacy Policy](https://xahau.network/privacy-policy/)
+  --- End Content ---

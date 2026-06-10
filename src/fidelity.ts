@@ -104,9 +104,24 @@ export function reconstructContext(tx: Record<string, unknown>, hookAccountId: s
     ledgerSeq: Number.isFinite(ledgerSeq) ? ledgerSeq : undefined,
     ledgerLastTime: typeof ledgerLastTime === "number" ? ledgerLastTime : (typeof tx.date === "number" ? tx.date : undefined),
     state: state && Object.keys(state).length ? { ...state } : undefined,
+    otxnParams: extractParams(tx.HookParameters),
     otxnFields,
     otxnBlob,
   };
+}
+
+/** Map a tx's HookParameters[] -> { HookParameterName(hex,UPPER) -> HookParameterValue(hex,UPPER) },
+ *  matching the VM's hex param-key convention (sandbox otxn_param/hook_param). */
+function extractParams(hp: unknown): Record<string, string> | undefined {
+  if (!Array.isArray(hp)) return undefined;
+  const out: Record<string, string> = {};
+  for (const w of hp) {
+    const p = (w as { HookParameter?: { HookParameterName?: string; HookParameterValue?: string } })?.HookParameter ?? (w as { HookParameterName?: string; HookParameterValue?: string });
+    const name = p?.HookParameterName;
+    const value = (p as { HookParameterValue?: string })?.HookParameterValue;
+    if (typeof name === "string") out[name.toUpperCase()] = typeof value === "string" ? value.toUpperCase() : "";
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 export interface CompareResult {

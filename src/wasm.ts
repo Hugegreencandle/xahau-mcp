@@ -186,3 +186,62 @@ function walkExpr(s: Reader, end: number, info: WasmInfo): void {
     }
   }
 }
+
+// ── Memory-export shim ────────────────────────────────────────────────────────
+// Many real Hooks define a linear memory but DON'T export it. Our local VM's host
+// functions need access to that memory to read/write the hook's buffers. This splices a
+// ("memory", memidx 0) entry into the export section (or adds one) so the instantiated
+// module exposes `exports.memory`. It runs the SAME bytecode — it only makes the hook's
+// real memory visible to the host, so the VM stops operating on a disconnected scratch
+// buffer. No behavior is faked. If memory is already exported (or there's none), it's a no-op.
+function lebU(n: number): number[] { const o: number[] = []; do { let b = n & 0x7f; n >>>= 7; if (n) b |= 0x80; o.push(b); } while (n); return o; }
+function readLebAt(b: Uint8Array, i: number): [number, number] { let r = 0, s = 0, by = 0; do { by = b[i++]; r |= (by & 0x7f) << s; s += 7; } while (by & 0x80); return [r, i]; }
+function cat3(a: Uint8Array, b: Uint8Array, c: Uint8Array): Uint8Array { const o = new Uint8Array(a.length + b.length + c.length); o.set(a, 0); o.set(b, a.length); o.set(c, a.length + b.length); return o; }
+
+export function ensureMemoryExport(bytes: Uint8Array): Uint8Array {
+  if (bytes.length < 8 || bytes[0] !== 0x00 || bytes[1] !== 0x61) return bytes; // not wasm
+  let i = 8, hasMem = false, memExported = false, importedMems = 0;
+  let exportSec: { start: number; end: number; bodyStart: number } | null = null;
+  let firstAfterExport = bytes.length; // insertion point if no export section (before first id in 8..12)
+  try {
+    while (i < bytes.length) {
+      const id = bytes[i];
+      const [len, k] = readLebAt(bytes, i + 1);
+      const bodyStart = k, end = k + len;
+      if (id === 5) hasMem = true;
+      if (id === 2) { // import section — count imported memories (they precede defined memories in index space)
+        let [cnt, p] = readLebAt(bytes, bodyStart);
+        for (let e = 0; e < cnt; e++) {
+          let [ml, p2] = readLebAt(bytes, p); p = p2 + ml;          // module name
+          let [nl, p3] = readLebAt(bytes, p); p = p3 + nl;          // field name
+          const kind = bytes[p++];
+          if (kind === 0x00) { const [, q] = readLebAt(bytes, p); p = q; }                                   // func: typeidx
+          else if (kind === 0x01) { p++; const fl = bytes[p++]; const [, q] = readLebAt(bytes, p); p = q; if (fl & 1) { const [, r] = readLebAt(bytes, p); p = r; } } // table: reftype + limits
+          else if (kind === 0x02) { importedMems++; const fl = bytes[p++]; const [, q] = readLebAt(bytes, p); p = q; if (fl & 1) { const [, r] = readLebAt(bytes, p); p = r; } } // mem: limits
+          else if (kind === 0x03) { p += 2; }                                                                // global: valtype + mut
+        }
+      }
+      if (id === 7) {
+        exportSec = { start: i, end, bodyStart };
+        let [cnt, p] = readLebAt(bytes, bodyStart);
+        for (let e = 0; e < cnt; e++) { const [nl, p2] = readLebAt(bytes, p); p = p2 + nl; const kind = bytes[p++]; const [, p3] = readLebAt(bytes, p); p = p3; if (kind === 0x02) memExported = true; }
+      }
+      if (id >= 8 && id <= 12 && firstAfterExport === bytes.length) firstAfterExport = i;
+      i = end;
+    }
+  } catch { return bytes; } // malformed — leave it; readWasm will report invalid
+  if (!hasMem || memExported) return bytes;
+
+  const name = Array.from(new TextEncoder().encode("memory"));
+  const entry = [...lebU(name.length), ...name, 0x02, ...lebU(importedMems)]; // export memidx 0 (+ any imported mems)
+  if (exportSec) {
+    const [cnt, p] = readLebAt(bytes, exportSec.bodyStart);
+    const existingEntries = bytes.slice(p, exportSec.end);
+    const newBody = [...lebU(cnt + 1), ...existingEntries, ...entry];
+    const newSec = Uint8Array.from([7, ...lebU(newBody.length), ...newBody]);
+    return cat3(bytes.slice(0, exportSec.start), newSec, bytes.slice(exportSec.end));
+  }
+  const body = [...lebU(1), ...entry];
+  const newSec = Uint8Array.from([7, ...lebU(body.length), ...body]);
+  return cat3(bytes.slice(0, firstAfterExport), newSec, bytes.slice(firstAfterExport));
+}

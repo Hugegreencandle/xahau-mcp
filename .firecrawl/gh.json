@@ -1,0 +1,21 @@
+How to set cron to claim rewards on Xahau - GitHub
+  URL: https://github.com/Ekiserrepe/cron-claimreward-xahau
+  1. Configure Account Settings (AccountSet) · 2. Install ClaimReward Hook · 3. Set Up Automated Claims with CronSet.
+  Category: github
+
+Balance Rewards | Xahau Docs
+  URL: https://xahau.network/docs/features/network-features/balance-rewards/
+  The Balance Rewards feature is a unique aspect of the Xahau network that allows users to accumulate and claim rewards based on their account balance.
+
+Xahau/TreasuryHook - GitHub
+  URL: https://github.com/Xahau/TreasuryHook/
+  Anybody can invoke the claim reward and the withdraw transactions on treasury account - after specified ledger interval. Installing the Hook on your account.
+  Category: github
+
+Learning Xahau: Automating Reward Claims with Hooks and CronSet
+  URL: https://dev.to/ekiserrepe/learning-xahau-automating-reward-claims-with-hooks-and-cronset-n4k
+  You have multiple Xahau accounts, each eligible for rewards every 30 days, 2 hours, and 13 minutes (precisely 2,599,980 seconds). Missing a ...
+
+Xahau Governance Explained: Mechanisms & Genesis - GateHub
+  URL: https://gatehub.net/blog/the-genesis-of-xahau-an-overview-of-key-governance-and-mechanisms/
+  Monthly Governance Validator Rewards. Xahau's Genesis Account is equipped with a Hook that controls the emission of Xahau token (XAH). This Hook ...
