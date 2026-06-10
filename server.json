@@ -11,9 +11,9 @@
   "version": "1.4.0",
   "packages": [
     {
-      "registryType": "npm",
-      "registryBaseUrl": "https://registry.npmjs.org",
-      "identifier": "xahau-mcp",
+      "registryType": "mcpb",
+      "identifier": "https://github.com/Hugegreencandle/xahau-mcp/releases/download/v1.4.0/xahau-mcp-1.4.0.mcpb",
+      "fileSha256": "c318566c2cbae055a1dd3c5e69b2d3cad01aa85d11b20571c74a0dbb90e8b8ae",
       "version": "1.4.0",
       "transport": {
         "type": "stdio"

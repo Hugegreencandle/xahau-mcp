@@ -1,0 +1,20 @@
+{
+  "manifest_version": "0.3",
+  "name": "xahau-mcp",
+  "display_name": "Xahau MCP",
+  "version": "1.4.0",
+  "description": "MCP server for the Xahau network — offline Hook WASM VM + static analyzer, read-only ledger, codec and unsigned-tx tooling. No key custody.",
+  "author": {
+    "name": "Dane Brown"
+  },
+  "homepage": "https://github.com/Hugegreencandle/xahau-mcp",
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"]
+    }
+  }
+}
