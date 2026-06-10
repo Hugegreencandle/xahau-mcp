@@ -77,6 +77,8 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 
 ## Install
 
+> New here or non-technical? Start with the **[plain-English tutorial](docs/TUTORIAL.md)** — what it does + cool things to just *ask*.
+
 Install straight from GitHub — no npm-registry account needed; it builds on install:
 
 ```bash
