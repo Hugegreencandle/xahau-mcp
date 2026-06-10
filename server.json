@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.hugegreencandle/xahau-mcp",
-  "description": "MCP server for the Xahau network — runs Hook WASM bytecode in a local VM and a Hooks-specific static-analysis/security rule engine, both offline, plus read-only ledger, codec, governance and unsigned-tx tooling. Read-only, no key custody.",
+  "name": "io.github.Hugegreencandle/xahau-mcp",
+  "description": "First MCP for the Xahau network — offline Hook WASM VM + static analyzer, read-only ledger tools.",
   "title": "Xahau MCP",
   "websiteUrl": "https://github.com/Hugegreencandle/xahau-mcp",
   "repository": {

@@ -1,7 +1,7 @@
 {
   "name": "xahau-mcp",
   "version": "1.4.0",
-  "mcpName": "io.github.hugegreencandle/xahau-mcp",
+  "mcpName": "io.github.Hugegreencandle/xahau-mcp",
   "description": "Model Context Protocol server for the Xahau network — the first MCP with offline Hook intelligence: WASM inspection + a Hooks-specific static-analysis/security rule engine, plus read-only ledger, codec, governance and unsigned-tx tooling.",
   "type": "module",
   "license": "MIT",
