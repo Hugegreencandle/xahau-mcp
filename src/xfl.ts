@@ -13,6 +13,8 @@ const SCALE = 1_000_000_000_000_000n;
 export const FLOAT_ONE = 6089866696204910592n;
 // real hook-api error codes (hooks-rs c/error.h)
 const INVALID_FLOAT = -10024n;
+const INVALID_ARGUMENT = -7n;       // hooks-rs c/error.h
+const CANT_RETURN_NEGATIVE = -33n;  // float_int cannot return a negative when absolute=0
 const DIVISION_BY_ZERO = -25n;
 
 interface Xfl { zero: boolean; sign: 1 | -1; mant: bigint; exp: number; }
@@ -47,14 +49,16 @@ export function floatSet(exp: number, mant: bigint): bigint {
 export function floatInt(x: bigint, dp: number, absolute: boolean): bigint {
   const f = decode(x);
   if (f.zero) return 0n;
-  const shift = f.exp + dp;
-  // guard against a malicious/garbage huge `dp` building an astronomically large BigInt (OOM DoS).
-  if (shift > 308 || shift < -308) return INVALID_FLOAT; // far beyond any real amount; real API overflows
+  // real float_int caps decimal places at 15; out-of-range dp is INVALID_ARGUMENT (also bounds the
+  // BigInt below, preventing OOM from a garbage dp).
+  if (!Number.isInteger(dp) || dp < 0 || dp > 15) return INVALID_ARGUMENT;
+  // float_int returns an unsigned integer; a negative value with absolute=0 is CANT_RETURN_NEGATIVE
+  // (negatives are reserved for error codes), not a negative result.
+  if (f.sign < 0 && !absolute) return CANT_RETURN_NEGATIVE;
 
-  let v: bigint;
-  if (shift >= 0) v = f.mant * 10n ** BigInt(shift);
-  else v = f.mant / 10n ** BigInt(-shift);
-  return absolute ? v : (f.sign < 0 ? -v : v);
+  const shift = f.exp + dp;
+  if (shift >= 0) return f.mant * 10n ** BigInt(shift);
+  return f.mant / 10n ** BigInt(-shift);
 }
 
 function cmpMag(a: Xfl, b: Xfl): number {

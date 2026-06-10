@@ -46,7 +46,7 @@ export function decodeHookOn(hex: string): { hookOn: string; firesOn: string[]; 
 export function encodeHookOn(txTypes: string[]): { hookOn: string; firesOn: string[] } {
   const want = new Set<string>();
   for (const t of txTypes) {
-    if (txTypeValue(t) === undefined) throw new Error(`Unknown transaction type: ${t}`);
+    if (txTypeValue(t) === undefined) throw new Error(`Unknown transaction type: ${t}. Valid types: ${allTxTypes().map((x) => x.name).join(", ")}`);
     want.add(t);
   }
   // Start all-ones (everything active-low = disabled), then enable the desired types.

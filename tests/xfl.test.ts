@@ -13,6 +13,14 @@ describe("XFL float", () => {
     }
   });
 
+  it("float_int error paths: negative w/ absolute=0 => CANT_RETURN_NEGATIVE, dp>15 => INVALID_ARGUMENT", () => {
+    const negFive = xfl.floatSet(0, -5n);
+    expect(xfl.floatInt(negFive, 0, false)).toBe(-33n); // CANT_RETURN_NEGATIVE — not a negative result
+    expect(xfl.floatInt(negFive, 0, true)).toBe(5n);    // absolute=1 => magnitude
+    expect(xfl.floatInt(xfl.floatSet(0, 5n), 16, false)).toBe(-7n);  // dp>15 => INVALID_ARGUMENT
+    expect(xfl.floatInt(xfl.floatSet(0, 5n), 1e9, false)).toBe(-7n); // garbage dp bounded, no OOM
+  });
+
   it("multiply 2*5=10, sum 3+4=7, divide 10/4=2.5", () => {
     expect(xfl.floatInt(xfl.floatMultiply(xfl.floatSet(0, 2n), xfl.floatSet(0, 5n)), 0, false)).toBe(10n);
     expect(xfl.floatInt(xfl.floatSum(xfl.floatSet(0, 3n), xfl.floatSet(0, 4n)), 0, false)).toBe(7n);

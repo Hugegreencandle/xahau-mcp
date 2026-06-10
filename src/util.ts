@@ -111,7 +111,13 @@ export function describeTx(tx: Record<string, any>): { summary: string; warnings
 }
 
 function xahAmountLocal(drops: string): string {
-  return (Number(BigInt(drops)) / 1_000_000).toString();
+  // BigInt math — never route through Number (loses precision above ~9.007e15 drops / 9B XAH).
+  let d: bigint;
+  try { d = BigInt(drops); } catch { return drops; }
+  const neg = d < 0n; if (neg) d = -d;
+  const whole = d / 1_000_000n;
+  const frac = (d % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
+  return `${neg ? "-" : ""}${whole}${frac ? "." + frac : ""}`;
 }
 const AC2 = AC as unknown as { encodeAccountID: (b: Uint8Array) => string };
 
