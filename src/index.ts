@@ -13,6 +13,7 @@ import { decodeHookOn, encodeHookOn } from "./hookon.js";
 import { xahAmount, decodeTxBlob, encodeTxBlob, decodeSetHook, decodeUriTokenId } from "./codec.js";
 import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTime, decodeAmount, describeTx } from "./util.js";
 import { decodeXpop } from "./xpop.js";
+import { decodeLeaseUri } from "./evernode.js";
 import { readWasm, hexToBytes, base64ToBytes } from "./wasm.js";
 import { lookupHookApi, hookApiCount, HOOK_FUNCTIONS } from "./hookapi.js";
 import { decodeCreateCode, runRules, listRules, type HookGrant } from "./analyzer.js";
@@ -291,6 +292,16 @@ server.registerTool("decode_xpop", {
 }, async ({ xpop }) => {
   try { const d = decodeXpop(xpop as string | Record<string, unknown>); return ok(d.summary, d as unknown as Record<string, unknown>); }
   catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("decode_lease_uri", {
+  description: "Decode an Evernode lease URIToken URI (the `evrlease`/LTV format) → lease index, lease amount in EVR (XFL-decoded), half ToS hash, mint identifier, outbound IP. Accepts the on-chain URI hex, the base64 text, or raw buffer hex. Verified against the canonical evernode-js-client encoder + real mainnet leases. Offline.",
+  inputSchema: { uri: z.string().describe("URIToken.URI hex, base64 text, or raw lease-buffer hex") },
+}, async ({ uri }) => {
+  const d = decodeLeaseUri(uri);
+  return d.isEvernodeLease
+    ? ok(`Evernode lease v${d.version} · index ${d.leaseIndex} · ${d.leaseAmountEvr} EVR${d.outboundIp ? ` · ip ${d.outboundIp}` : ""}`, d as unknown as Record<string, unknown>)
+    : fail(d.reason ?? "not an Evernode lease", d as unknown as Record<string, unknown>);
 });
 
 server.registerTool("decode_amount", {
