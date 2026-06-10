@@ -26,6 +26,7 @@ import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned } from "./builders.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
+import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT } from "./outputSchemas.js";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,7 +44,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "1.1.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "1.2.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -200,6 +201,7 @@ server.registerTool("get_account_uritokens", {
 server.registerTool("decode_hook_on", {
   description: "Decode a HookOn 256-bit bitmap into the set of transaction types the hook fires on. Handles the inverted/active-low encoding and the active-high SetHook bit. Offline.",
   inputSchema: { hookOn: z.string().describe("HookOn hex (up to 64 chars)") },
+  outputSchema: DECODE_HOOKON_OUT,
 }, async ({ hookOn }) => {
   try { const d = decodeHookOn(hookOn); return ok(`Fires on ${d.count} type(s): ${d.firesOn.join(", ") || "(none)"}`, d); }
   catch (e) { return fail((e as Error).message); }
@@ -208,6 +210,7 @@ server.registerTool("decode_hook_on", {
 server.registerTool("encode_hook_on", {
   description: "Build a canonical HookOn hex from a list of transaction types to fire on. Offline.",
   inputSchema: { txTypes: z.array(z.string()).min(1).describe("e.g. [\"Payment\",\"Invoke\"]") },
+  outputSchema: ENCODE_HOOKON_OUT,
 }, async ({ txTypes }) => {
   try { const e = encodeHookOn(txTypes); return ok(`HookOn ${e.hookOn} fires on: ${e.firesOn.join(", ")}`, e); }
   catch (e) { return fail((e as Error).message); }
@@ -250,6 +253,7 @@ server.registerTool("xah_amount", {
 server.registerTool("validate_address", {
   description: "Validate a Xahau/XRPL address (classic r-address or X-address) → type, account-id, embedded destination tag, network. Offline.",
   inputSchema: { address: z.string() },
+  outputSchema: VALIDATE_ADDRESS_OUT,
 }, async ({ address }) => { const v = validateAddress(address); return v.valid ? ok(`valid ${v.type}${"tag" in v && v.tag !== null ? ` (tag ${v.tag})` : ""}`, v) : fail((v as { reason: string }).reason, v); });
 
 server.registerTool("xaddress", {
@@ -280,6 +284,7 @@ server.registerTool("ripple_time", {
 server.registerTool("decode_xpop", {
   description: "Decode an XPOP (Xahau Proof of Payment) — the proof blob inside an Import/Burn2Mint tx. Accepts the Import Blob hex (hex of the XPOP JSON) or the XPOP JSON itself. Returns the source ledger header, the decoded inner BURN transaction (type, burned drops = its Fee, target network), and the UNL validator set. Offline.",
   inputSchema: { xpop: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Import Blob hex, XPOP JSON string, or XPOP object") },
+  outputSchema: DECODE_XPOP_OUT,
 }, async ({ xpop }) => {
   try { const d = decodeXpop(xpop as string | Record<string, unknown>); return ok(d.summary, d as unknown as Record<string, unknown>); }
   catch (e) { return fail((e as Error).message); }
@@ -288,6 +293,7 @@ server.registerTool("decode_xpop", {
 server.registerTool("decode_amount", {
   description: "Decode an amount: native drops (digits), a serialized 8-byte native or 48-byte issued STAmount (hex), or an issued amount object {currency,issuer,value} → normalized value/currency/issuer. Offline.",
   inputSchema: { amount: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("drops string, STAmount hex, or amount object") },
+  outputSchema: DECODE_AMOUNT_OUT,
 }, async ({ amount }) => {
   try { const d = decodeAmount(amount as any); return ok(d.type === "native" ? `${(d as any).xah} XAH (${(d as any).drops} drops)` : `${(d as any).value} ${(d as any).currency}${(d as any).issuer ? ` / ${(d as any).issuer}` : ""}`, d); }
   catch (e) { return fail((e as Error).message); }
@@ -296,6 +302,7 @@ server.registerTool("decode_amount", {
 server.registerTool("decode_sign_request", {
   description: "Decode a sign request (a Xaman/Xumm payload's txjson, or a raw tx_blob hex) into the transaction plus a plain-English 'what you would be authorizing' summary and safety warnings (SetHook, AccountDelete, key changes, no-expiry, already-signed). Offline — understand before you sign.",
   inputSchema: { txjson: z.record(z.string(), z.unknown()).optional(), txBlobHex: z.string().optional() },
+  outputSchema: DECODE_SIGNREQ_OUT,
 }, async ({ txjson, txBlobHex }) => {
   try {
     const tx = (txjson as Record<string, any> | undefined) ?? (txBlobHex ? (decodeTxBlob(txBlobHex) as Record<string, any>) : undefined);
@@ -337,6 +344,7 @@ server.registerTool("analyze_hook", {
     grants: z.array(z.record(z.string(), z.unknown())).optional(),
     flags: z.number().optional(),
   },
+  outputSchema: ANALYZE_HOOK_OUT,
 }, async ({ wasmHex, wasmBase64, hookOn, namespace, parameters, grants, flags }) => {
   try {
     const wasm = decodeCreateCode({ wasmHex, wasmBase64 });
@@ -413,6 +421,7 @@ server.registerTool("execute_hook", {
     resolveKeylets: z.boolean().optional().describe("if true, fetch any slot_set'd ledger objects live and re-run (async pre-resolve)"),
     network: NET,
   },
+  outputSchema: EXECUTE_HOOK_OUT,
 }, async ({ wasmHex, wasmBase64, txType, otxnFields, otxnParams, hookAccountId, hookParams, state, keyletBlobs, otxnBlob, ledgerSeq, feeBase, resolveKeylets, network }) => {
   try {
     const bytes = wasmHex ? hexToBytes(wasmHex) : wasmBase64 ? base64ToBytes(wasmBase64) : null;
@@ -492,6 +501,7 @@ server.registerTool("estimate_hook_fee", {
 server.registerTool("hook_report", {
   description: "One-call comprehensive report on a Hook: structure (imports/exports/size/instructions), a plain-English classification of what it does, the full security analysis (SARIF-lite findings + severity summary), HookOn decode, and a fee estimate. Combines inspect + classify + analyze + estimate. Offline.",
   inputSchema: { ...WASM_IN, hookOn: z.string().optional(), namespace: z.string().optional(), grants: z.array(z.record(z.string(), z.unknown())).optional() },
+  outputSchema: HOOK_REPORT_OUT,
 }, async ({ wasmHex, wasmBase64, hookOn, namespace, grants }) => {
   try {
     const w = decodeCreateCode({ wasmHex, wasmBase64 });
@@ -529,6 +539,7 @@ server.registerTool("scaffold_hook", {
 server.registerTool("classify_hook", {
   description: "Infer in plain English what a Hook DOES (firewall/filter, emitter, stateful processor, financial/XFL, authorizer, autonomous agent…) from its structure — imports, hook/cbak exports, HookOn, state/emit/float/guard usage. Heuristic, offline; does not execute the bytecode.",
   inputSchema: { ...WASM_IN, hookOn: z.string().optional() },
+  outputSchema: CLASSIFY_HOOK_OUT,
 }, async ({ wasmHex, wasmBase64, hookOn }) => {
   try {
     const w = decodeCreateCode({ wasmHex, wasmBase64 });
@@ -544,6 +555,7 @@ server.registerTool("hook_diff", {
     beforeWasmHex: z.string().optional(), beforeWasmBase64: z.string().optional(), beforeHookOn: z.string().optional(),
     afterWasmHex: z.string().optional(), afterWasmBase64: z.string().optional(), afterHookOn: z.string().optional(),
   },
+  outputSchema: HOOK_DIFF_OUT,
 }, async ({ beforeWasmHex, beforeWasmBase64, beforeHookOn, afterWasmHex, afterWasmBase64, afterHookOn }) => {
   try {
     const a = decodeCreateCode({ wasmHex: beforeWasmHex, wasmBase64: beforeWasmBase64 });
@@ -592,6 +604,7 @@ server.registerTool("compute_reward", {
 server.registerTool("quantum_grade", {
   description: "Grade a Xahau account for quantum (HNDL) readiness: master-key-disabled, regular key, multi-sign and installed hooks → 0-100 score + tier + recommendations. Ports the xrpl-audit quantum model to Xahau, with a Hook/PQC dimension. Read-only.",
   inputSchema: { address: z.string().min(25).describe("r-address"), network: NET },
+  outputSchema: QUANTUM_OUT,
 }, async ({ address, network }) => {
   try { const g = await quantumGrade(address, network as Net); return ok(`${address}: ${g.tier} (${g.score}/100) — ${g.masterDisabled ? "master disabled" : "master ENABLED"}`, g); }
   catch (e) { return fail((e as Error).message); }
@@ -666,6 +679,7 @@ server.registerTool("prepare_transaction", {
 server.registerTool("vm_fidelity_report", {
   description: "HONEST FIDELITY METRIC: measures how faithfully the local Hook VM reproduces what REALLY happened on Xahau mainnet. Loads a committed corpus (data/hook-corpus.json) of real validated transactions whose metadata carried HookExecutions, runs each hook's real bytecode through the local VM, and compares the VM's accept/rollback DIRECTION to the on-chain HookResult. The agreement % is computed ONLY over COMPARABLE (non-degraded, scoreable) runs; degraded/halted/indeterminate runs are reported separately and EXCLUDED — never counted as a match. Strictly offline; reads no network. If the corpus is empty/tiny it says 'insufficient corpus' rather than print an unsupported number.",
   inputSchema: { includeMismatches: z.boolean().default(true).describe("include the per-mismatch list (txHash/vmExit/onChainResult)") },
+  outputSchema: FIDELITY_OUT,
 }, async ({ includeMismatches }) => {
   try {
     if (!existsSync(CORPUS_PATH)) return fail(`corpus not found at ${CORPUS_PATH}; run the corpus builder first.`);
