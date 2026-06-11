@@ -18,6 +18,36 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 - **Watch governance live** — `governance_state` decodes the Genesis Governance Game's full hook state: who holds the 20 seats, every open vote and tally, and whether a change (member swap, reward-rate change) is about to be actioned. No explorer shows this.
 - **Build unsigned transactions** (SetHook, ClaimReward, Payment) with an automatic security preflight — returned **unsigned**, to be signed offline.
 
+## Why this is the most advanced blockchain MCP we know of
+
+Strong claim, so here is the checkable evidence (2026-06-11). To our knowledge no MCP for ANY
+chain — Ethereum, Solana, Bitcoin, XRPL or otherwise — combines even two of these; the closest
+comparators are cloud-simulation MCPs (e.g. Tenderly's, which simulates on their hosted
+infrastructure) and standalone analyzers (e.g. Slither, which is EVM-only and not an MCP):
+
+1. **Executes real on-chain contract bytecode in a LOCAL VM** — `execute_hook` runs the actual
+   CreateCode WASM with no node, no cloud, no account. Not an ABI wrapper, not a hosted simulator.
+2. **Publishes a measured, regression-locked fidelity score against chain ground truth** —
+   `vm_fidelity_report` replays 30 real mainnet hook executions: **30/30 agree (100%), 0 degraded**,
+   including the foreign-state-reading hook that dominates live traffic. The corpus, the method and
+   the honest history (25% → 0% → 100%) are in [docs/FIDELITY.md](docs/FIDELITY.md). We know of no
+   other blockchain MCP that even attempts this measurement.
+3. **In-protocol static security analysis** — a Hooks-specific rule engine (SARIF-lite findings),
+   calibrated against the network's own genesis hooks.
+4. **In-protocol differential fuzzing** — `fuzz_hook` maps a contract's accept/reject decision
+   boundary in the local VM.
+5. **Post-mortems real transactions with real bytecode** — `hook_execution_postmortem` replays what
+   actually fired on chain and compares.
+6. **Reproduces on-chain economics exactly** — `reward_status` re-implements the genesis reward
+   hook's formula and reproduces a real emitted payout **to the drop** (verified, test-locked).
+7. **Decodes live governance end-to-end** — `governance_state` shows every seat, vote, tally and
+   threshold of the Governance Game, live.
+8. **Operational doctors** for the ecosystem's real pain: failed-tx diagnosis with cause+fix,
+   Evernode host health, claim-overdue detection.
+
+Every claim above is reproducible from this repo: the corpus is committed, the tests assert the
+numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) are cited in code.
+
 ## Safety posture
 
 - **Read-only** toward the network. There is no `submit` and no `sign` anywhere in this server.
