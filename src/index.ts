@@ -11,7 +11,7 @@ import { DEFS_AVAILABLE, HOOKAPI_AVAILABLE, allTxTypes, decodeResult, GOVERNANCE
 import * as rpc from "./rpc.js";
 import { decodeHookOn, encodeHookOn } from "./hookon.js";
 import { xahAmount, decodeTxBlob, encodeTxBlob, decodeSetHook, decodeUriTokenId } from "./codec.js";
-import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTime, decodeAmount, describeTx } from "./util.js";
+import { validateAddress, xaddressEncode, xaddressDecode, currencyCode, rippleTime, decodeAmount, describeTx, accountIdToR } from "./util.js";
 import { decodeXpop } from "./xpop.js";
 import { decodeLeaseUri } from "./evernode.js";
 import { explainAccount } from "./explain.js";
@@ -52,7 +52,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "1.6.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "1.7.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -483,21 +483,44 @@ server.registerTool("execute_hook", {
     if (!bytes) return fail("provide wasmHex or wasmBase64");
     const baseCtx = { txType, otxnFields, otxnParams, hookAccountId, hookParams, state, keyletBlobs, otxnBlob, ledgerSeq, feeBase };
     let r = runHook(bytes, baseCtx);
-    let resolved: string[] = [];
-    // async pre-resolve: fetch the ledger objects the hook tried to slot_set, then re-run once
-    if (resolveKeylets && r.wantedKeylets.length) {
-      const fetched: Record<string, string> = { ...(keyletBlobs ?? {}) };
-      for (const idx of r.wantedKeylets) {
-        try {
-          const le = await rpc.getLedgerEntry({ index: idx, binary: true }, network as Net) as any;
-          const binHex = le.node_binary ?? le.node?.node_binary;
-          if (binHex) { fetched[idx] = binHex; resolved.push(idx); }
-        } catch { /* leave unresolved */ }
+    const resolved: string[] = [];
+    const resolvedForeign: string[] = [];
+    // async pre-resolve (up to 2 rounds — a resolved read can expose a further dependent read):
+    // fetch the ledger objects the hook slot_set AND the foreign-state entries it read, then re-run.
+    if (resolveKeylets) {
+      const fetchedKeylets: Record<string, string> = { ...(keyletBlobs ?? {}) };
+      const fetchedForeign: Record<string, string | null> = {};
+      for (let round = 0; round < 2 && (r.wantedKeylets.length || r.wantedForeignState.length); round++) {
+        let progressed = false;
+        for (const idx of r.wantedKeylets) {
+          if (fetchedKeylets[idx]) continue;
+          try {
+            const le = await rpc.getLedgerEntry({ index: idx, binary: true }, network as Net) as any;
+            const binHex = le.node_binary ?? le.node?.node_binary;
+            if (binHex) { fetchedKeylets[idx] = binHex; resolved.push(idx); progressed = true; }
+          } catch { /* leave unresolved */ }
+        }
+        for (const composite of r.wantedForeignState) {
+          if (composite in fetchedForeign) continue;
+          const [acc, ns, key] = composite.split("|");
+          const rAddr = accountIdToR(acc);
+          if (!rAddr) continue;
+          try {
+            const le = await rpc.getLedgerEntry({ hook_state: { account: rAddr, key, namespace_id: ns } }, network as Net) as any;
+            const data = le.node?.HookStateData;
+            fetchedForeign[composite] = typeof data === "string" ? data : null;
+            resolvedForeign.push(composite); progressed = true;
+          } catch (e) {
+            // entryNotFound = CONFIRMED absent at this ledger (DOESNT_EXIST is then faithful); other errors stay unresolved
+            if (String((e as Error).message).includes("entryNotFound")) { fetchedForeign[composite] = null; resolvedForeign.push(composite); progressed = true; }
+          }
+        }
+        if (!progressed) break;
+        r = runHook(bytes, { ...baseCtx, keyletBlobs: fetchedKeylets, foreignState: fetchedForeign });
       }
-      if (resolved.length) r = runHook(bytes, { ...baseCtx, keyletBlobs: fetched });
     }
     const tail = r.degraded ? " ⚠ DEGRADED" : "";
-    return ok(`${r.exit.toUpperCase()}${r.returnCode !== null ? ` code=${r.returnCode}` : ""}${r.returnString ? ` "${r.returnString}"` : ""} · ${r.stateWrites.length} state write(s) · ${r.emitted.length} emit(s)${resolved.length ? ` · resolved ${resolved.length} keylet(s)` : ""}${tail}`, { ...(r as unknown as Record<string, unknown>), resolvedKeylets: resolved });
+    return ok(`${r.exit.toUpperCase()}${r.returnCode !== null ? ` code=${r.returnCode}` : ""}${r.returnString ? ` "${r.returnString}"` : ""} · ${r.stateWrites.length} state write(s) · ${r.emitted.length} emit(s)${resolved.length ? ` · resolved ${resolved.length} keylet(s)` : ""}${resolvedForeign.length ? ` · resolved ${resolvedForeign.length} foreign-state entr(ies)` : ""}${tail}`, { ...(r as unknown as Record<string, unknown>), resolvedKeylets: resolved, resolvedForeignState: resolvedForeign });
   } catch (e) { return fail((e as Error).message); }
 });
 

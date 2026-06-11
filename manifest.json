@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "xahau-mcp",
   "display_name": "Xahau MCP",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "MCP server for the Xahau network — offline Hook WASM VM + static analyzer, read-only ledger, codec and unsigned-tx tooling. No key custody.",
   "author": {
     "name": "Dane Brown"

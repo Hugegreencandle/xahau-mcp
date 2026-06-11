@@ -121,6 +121,14 @@ function xahAmountLocal(drops: string): string {
 }
 const AC2 = AC as unknown as { encodeAccountID: (b: Uint8Array) => string };
 
+/** 20-byte account-id hex -> classic r-address (null when unparseable). */
+export function accountIdToR(accountIdHex: string): string | null {
+  try {
+    if (!/^[0-9a-fA-F]{40}$/.test(accountIdHex)) return null;
+    return AC2.encodeAccountID(Uint8Array.from(Buffer.from(accountIdHex, "hex")));
+  } catch { return null; }
+}
+
 export function rippleTime(input: { ripple?: number; iso?: string; unix?: number }) {
   let rippleSecs: number;
   if (input.ripple !== undefined) rippleSecs = Math.floor(input.ripple);

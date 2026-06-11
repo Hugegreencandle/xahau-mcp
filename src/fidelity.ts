@@ -74,7 +74,7 @@ export function onChainResult(he: OnChainHookExecution): { decision: "accept" | 
  *   `otxn_field(wp,wl,fid)` reads: it looks up `ctx.otxnFields[String(fid)]` where `fid` is the
  *   sfield code the hook passes in. (Verified in src/sandbox.ts.)
  */
-export function reconstructContext(tx: Record<string, unknown>, hookAccountId: string, ledgerLastTime?: number, state?: Record<string, string>): SandboxContext {
+export function reconstructContext(tx: Record<string, unknown>, hookAccountId: string, ledgerLastTime?: number, state?: Record<string, string>, foreignState?: Record<string, string | null>, keyletBlobs?: Record<string, string>, hookParams?: Record<string, string>): SandboxContext {
   const txType = tx.TransactionType as string | undefined;
   const ledgerIndex = tx.ledger_index;
   const ledgerSeq = typeof ledgerIndex === "number" ? ledgerIndex : typeof ledgerIndex === "string" ? Number(ledgerIndex) : undefined;
@@ -104,6 +104,9 @@ export function reconstructContext(tx: Record<string, unknown>, hookAccountId: s
     ledgerSeq: Number.isFinite(ledgerSeq) ? ledgerSeq : undefined,
     ledgerLastTime: typeof ledgerLastTime === "number" ? ledgerLastTime : (typeof tx.date === "number" ? tx.date : undefined),
     state: state && Object.keys(state).length ? { ...state } : undefined,
+    foreignState: foreignState && Object.keys(foreignState).length ? { ...foreignState } : undefined,
+    hookParams: hookParams && Object.keys(hookParams).length ? { ...hookParams } : undefined,
+    keyletBlobs: keyletBlobs && Object.keys(keyletBlobs).length ? { ...keyletBlobs } : undefined,
     otxnParams: extractParams(tx.HookParameters),
     otxnFields,
     otxnBlob,
@@ -167,6 +170,10 @@ export interface FidelityCase {
   hookAccountId: string; // 20-byte hex account the hook is installed on
   ledgerLastTime?: number; // parent-ledger close time (Ripple time) so ledger_last_time() is real, not degraded
   state?: Record<string, string>; // pre-execution on-chain hook state (32-byte key hex -> value hex)
+  foreignState?: Record<string, string | null>; // "ACCOUNTID|NAMESPACE|KEY" -> value hex, null = confirmed absent at the prior ledger
+  keyletBlobs?: Record<string, string>; // ledger-object index hex -> serialized object hex at the prior ledger (for slot_set)
+  hookParams?: Record<string, string>; // INSTALLED hook parameters (Hook object, falling back to HookDefinition defaults): name hex -> value hex
+  otxnId?: string; // the real originating tx hash (so otxn_id() serves the true value, not a sentinel)
 }
 
 export interface FidelityCaseResult {
@@ -184,8 +191,9 @@ export interface FidelityCaseResult {
  * real bytecode, and compare to the on-chain HookExecution. No network access.
  */
 export function runFidelityCase(caseObj: FidelityCase): FidelityCaseResult {
-  const ctx = reconstructContext(caseObj.tx, caseObj.hookAccountId, caseObj.ledgerLastTime, caseObj.state);
+  const ctx = reconstructContext(caseObj.tx, caseObj.hookAccountId, caseObj.ledgerLastTime, caseObj.state, caseObj.foreignState, caseObj.keyletBlobs, caseObj.hookParams);
   if (caseObj.hookHash) ctx.hookHash = caseObj.hookHash;
+  if (caseObj.otxnId) ctx.otxnId = caseObj.otxnId;
 
   let bytes: Uint8Array;
   try {
@@ -225,6 +233,9 @@ export interface CorpusCase {
   ledgerIndex?: number;
   ledgerCloseTime?: number; // Ripple time of the ledger close (feeds ledger_last_time)
   hookState?: Record<string, string>; // pre-execution on-chain hook state (key hex -> value hex)
+  foreignState?: Record<string, string | null>; // pre-execution foreign state the hook reads ("ACCOUNTID|NAMESPACE|KEY" -> hex, null = confirmed absent)
+  keyletBlobs?: Record<string, string>; // pre-execution serialized ledger objects the hook slots (index hex -> blob hex)
+  installedHookParams?: Record<string, Record<string, string>>; // hookHash -> installed params (name hex -> value hex)
   tx: Record<string, unknown>;
   hookAccount: string; // r-address the hook(s) are installed on
   hookExecutions: OnChainHookExecution[]; // one per hook that ran in this tx
@@ -347,6 +358,10 @@ export function fidelityReport(corpus: HookCorpus): FidelityReport {
         hookAccountId,
         ledgerLastTime: cs.ledgerCloseTime,
         state: cs.hookState,
+        foreignState: cs.foreignState,
+        keyletBlobs: cs.keyletBlobs,
+        hookParams: hash ? cs.installedHookParams?.[hash] : undefined,
+        otxnId: cs.txHash,
       });
 
       if (res.agree === null) {

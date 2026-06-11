@@ -98,57 +98,55 @@ one-line headline.
 ## Current measured numbers
 
 Measured by `fidelityReport()` over the committed [`data/hook-corpus.json`](../data/hook-corpus.json)
-— **30 real mainnet HookExecutions** spread across multiple ledgers, with each ledger's `close_time`
-captured (so `ledger_last_time()` is real) and each account's pre-execution hook state fetched at
-`ledgerIndex-1` (0 rate-limited calls, not truncated). 0 degraded — all 30 are comparable.
+— **30 real mainnet HookExecutions** spread across multiple ledgers (0 rate-limited calls, not
+truncated). Each case carries the FULL pre-execution context, captured at `ledgerIndex-1`:
+
+- the ledger's `close_time` (so `ledger_last_time()` is real),
+- the hook account's own hook state,
+- the **installed hook parameters** (Hook ledger object, falling back to the HookDefinition's
+  defaults — e.g. Evernode hooks read their governor address from these),
+- every **foreign-state entry the hook actually reads** (`state_foreign`), discovered by running the
+  bytecode and iteratively fetching exactly what it asks for (`entryNotFound` stored as
+  confirmed-absent so `DOESNT_EXIST` is faithful, never a guess),
+- any **keylet-resolved ledger objects** it `slot_set`s, and the real originating tx hash (`otxn_id`).
 
 | metric | value |
 |---|---|
-| total / comparable | **30 / 29** |
-| agreements (VM decision == on-chain) | **0** |
-| **agreementPct** | **0% (29 comparable)** |
-| degraded / excluded | **1** |
+| total / comparable | **30 / 30** |
+| agreements (VM decision == on-chain) | **30** |
+| **agreementPct** | **100%** |
+| degraded / excluded | **0** |
 
 **Per-hook:**
 
 | HookHash (prefix) | comparable | agreementPct | what it is |
 |---|---|---|---|
-| `1F7C84E14313…` (Evernode-style) | 29 | **0%** | reads **foreign-account state + keylet-resolved slots** |
-| `610F33B8EBF7…` (genesis reward) | 0 | n/a (degraded) | needs more context once its real memory + account are connected |
+| `1F7C84E14313…` (Evernode heartbeat) | 29 | **100%** | reads foreign-account state, config chain, keylet slots, `slot_float`, emits |
+| `B352CB99C3F0…` (Evernode registry) | 1 | **100%** | foreign state + `otxn_id` |
 
-> **Why this is *lower* than the earlier 3.3% — and why that's correct.** An expert panel found a
-> real VM bug: the local VM was reading/writing a **disconnected scratch buffer** for hooks that
-> define linear memory but don't *export* it (which most real hooks don't). That's now fixed — the VM
-> splices a memory export so it operates on the hook's *real* memory (`src/wasm.ts ensureMemoryExport`,
-> same bytecode, nothing faked). With the bug fixed, the reward hook no longer *accidentally* accepts
-> on a zeroed buffer; it honestly degrades when its full context isn't reconstructed. The old 3.3%
-> was partly an artifact of the bug. We also now populate `otxn_param`/`hook_param` (keyed by hex, not
-> ASCII) from the tx — correctness fixes that don't move this Evernode-dominated corpus but improve
-> `execute_hook` for every hook with internal data constants.
+### How it got here (the honest history)
 
-(An earlier 12-case snapshot showed `858715…` at **60%** — simpler hooks still reproduce well.)
+- An early 12-case snapshot measured **25%**; a memory-export bug fix (the VM had been operating on a
+  disconnected scratch buffer) dropped an Evernode-dominated corpus to an honest **0%** — the hook
+  could not fetch its foreign-state inputs and rolled back where the chain accepted.
+- The fix was **foreign-state reconstruction** (v1.7.0): `state_foreign`/`state_foreign_set` in the VM,
+  32-byte state-key padding (short keys are left-zero-padded exactly as on-ledger), `slot_float` /
+  `float_sto` (STAmount ⇄ XFL), installed-hook-param capture, and an **iterative pre-resolve** loop —
+  run the bytecode, fetch exactly the entries it asks for at the pre-execution ledger, re-run, repeat
+  (a resolved read can expose the next dependent read; the Evernode heartbeat hook's chain is
+  6+ reads deep).
+- With the real inputs supplied, the dominant live hook reproduces **29/29**, and the corpus measures
+  **30/30 (100%), 0 degraded**.
 
-### What this means — the honest, precise picture
+### What this means — kept honest
 
-The VM **runs the real bytecode faithfully** (0 degraded — no unsupported-call escape). The low
-aggregate is **not** "the VM is wrong"; it is **corpus composition + context completeness**:
-
-- **Live Xahau hook traffic is currently dominated by one complex hook** (`1F7C84…`, an Evernode-style
-  reputation/heartbeat hook) — 29 of 30 executions. Its imports include `state_foreign`,
-  `state_foreign_set`, `slot_set`, `slot_subfield`, `slot_float`, `otxn_slot`, `float_*`, `emit`.
-- It reads **another account's state** and **keylet-resolved ledger objects** — data that lives across
-  the ledger, not in the originating tx or its own account. The offline harness reconstructs the tx
-  fields, `ledger_last_time`, and the account's *own* hook state, but **not foreign-account state or
-  slotted objects**, so this hook can't fetch its inputs and rolls back. Reproducing it faithfully
-  would require reconstructing arbitrary ledger state — essentially re-implementing node state access.
-- **Simpler hooks reproduce well**: the reward hook is 100%; an earlier sample's `858715…` was 60%.
-
-**Honest takeaway:** the VM is trustworthy today for **control-flow / param / own-state** hooks; it
-**cannot yet reproduce the decision of hooks that read foreign state or keylet-resolved slots**
-without full ledger-context reconstruction. That class dominates current live traffic, so the raw
-aggregate is low — but the per-hook breakdown is the truthful measure, and it is reported, not hidden.
-
-**Path forward (large, deliberately deferred):** reconstruct foreign-account state + pre-resolve the
-keylets a hook `slot_set`s (the corpus fetch already has the infrastructure to pull ledger objects by
-index) into the VM context, then re-measure. This is a meaningful undertaking, not a one-liner, and is
-tracked rather than rushed — overstating fidelity would defeat the purpose of measuring it.
+- 100% here means: on this 30-execution corpus, with full pre-execution context, the VM's
+  accept/rollback **direction** matched the chain on every comparable run. It does **not** mean the
+  VM is a consensus-faithful xahaud replica — `etxn_details` is served as a disclosed synthetic
+  placeholder (cannot change the decision), `state_foreign_set` does not model the HookGrant
+  requirement, XFL math truncates rather than round-half-up, and the exact `HookReturnCode` is not
+  asserted (it can encode source line numbers and runtime values).
+- The corpus is Evernode-dominated because live Xahau traffic is — the per-hook breakdown is always
+  reported so composition can't hide anything.
+- The measurement stays **offline and reproducible**: the resolved context is committed inside the
+  corpus; `vm_fidelity_report` replays it with no network access.

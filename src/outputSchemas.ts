@@ -18,8 +18,9 @@ const bool = z.boolean().optional();
 
 export const EXECUTE_HOOK_OUT = {
   exit: str, returnCode: z.unknown().optional(), returnString: str, degraded: bool,
-  unsupportedCalls: arr, stateWrites: arr, emitted: arr, trace: arr, wantedKeylets: arr,
-  resolvedKeylets: arr, stateApplied: z.unknown().optional(), fidelity: str, caveat: str, ...err,
+  unsupportedCalls: arr, syntheticCalls: arr, stateWrites: arr, foreignStateWrites: arr,
+  emitted: arr, trace: arr, wantedKeylets: arr, wantedForeignState: arr,
+  resolvedKeylets: arr, resolvedForeignState: arr, stateApplied: z.unknown().optional(), fidelity: str, caveat: str, ...err,
 };
 
 export const ANALYZE_HOOK_OUT = { findings: arr, summary: obj, decoded: obj, valid: bool, ...err };

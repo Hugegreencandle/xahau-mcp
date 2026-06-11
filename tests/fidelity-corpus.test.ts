@@ -90,3 +90,21 @@ describe("fidelity corpus: committed data/hook-corpus.json", () => {
     expect(rep.headline).toMatch(/insufficient corpus/i);
   });
 });
+
+describe("fidelity over the committed corpus (foreign-state reconstruction)", () => {
+  // The committed corpus carries FULL pre-execution context (installed hook params, iteratively
+  // pre-resolved foreign state, keylet blobs, otxn ids). With it, the VM must reproduce the
+  // on-chain accept/rollback direction on EVERY comparable execution — this is the v1.7.0
+  // milestone (Evernode heartbeat hook went 0% -> 100%) and a regression here means either the
+  // VM or the resolve pipeline broke.
+  it("agrees with on-chain on every comparable execution, 0 degraded", async () => {
+    const { fidelityReport } = await import("../src/fidelity.js");
+    const corpus = JSON.parse(readFileSync(CORPUS_PATH, "utf8"));
+    const r = fidelityReport(corpus);
+    expect(r.insufficient).toBe(false);
+    expect(r.degradedCount).toBe(0);
+    expect(r.comparable).toBe(r.total);
+    expect(r.agreements).toBe(r.comparable);
+    expect(r.agreementPct).toBe(100);
+  });
+});
