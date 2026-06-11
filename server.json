@@ -13,7 +13,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/Hugegreencandle/xahau-mcp/releases/download/v2.0.0/xahau-mcp-2.0.0.mcpb",
-      "fileSha256": "85682da4158b3d9d945405c92aaa242542bfd7da574e99f079fac26f96aeef6c",
+      "fileSha256": "c0b050aadff63e66b20fd0b2da87f07626f1560cc6fc8d8fb78a65cab6d45304",
       "version": "2.0.0",
       "transport": {
         "type": "stdio"
