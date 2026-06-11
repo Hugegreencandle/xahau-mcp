@@ -13,7 +13,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/Hugegreencandle/xahau-mcp/releases/download/v1.7.0/xahau-mcp-1.7.0.mcpb",
-      "fileSha256": "7aee60cef3cc314ee4df2d8b281aadaa65dbb17b6f6666de29d9e79a203c92e3",
+      "fileSha256": "627f0d189bb7f6480870f193fb5aaa836e595b6c9ba1ac22e658cd734c04dd84",
       "version": "1.7.0",
       "transport": {
         "type": "stdio"
