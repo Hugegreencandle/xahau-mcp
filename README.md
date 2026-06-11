@@ -14,6 +14,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 - **Read Xahau ledger state** — accounts, installed hooks, hook definitions, hook state, transactions (with `HookExecutions` metadata), ledgers.
 - **Answer the #1 retail question** — `reward_status` tells any account whether it's opted in to Xahau network rewards (Balance Adjustments), the exact XAH accrued — computed with the genesis reward hook's own formula and live parameters, verified to reproduce a real on-chain payout **to the drop** — when it can next claim, and whether the claim is overdue (late claiming forfeits yield).
 - **Diagnose an Evernode host** — `evernode_host_diagnostics` automates the official troubleshooting checklist for Xahau's largest operator group: registration, heartbeat liveness (the actual on-chain active rule), reputation, EVR trustline, lease offers, specs and accumulated rewards, in one read-only call.
+- **Explain a failed transaction** — `diagnose_failed_tx` turns an engine result + hook return strings into a plain-English cause and a concrete fix.
 - **Build unsigned transactions** (SetHook, ClaimReward, Payment) with an automatic security preflight — returned **unsigned**, to be signed offline.
 
 ## Safety posture
@@ -54,6 +55,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | `decode_uritoken_id` · `xah_amount` | URIToken ID validation · XAH⇄drops. |
 | `decode_xpop` | Decode an Import/Burn2Mint XPOP → source ledger, inner burn tx, burned drops, UNL validators. |
 | `decode_result` | Engine result code ⇄ name (e.g. 153 ⇄ tecHOOK_REJECTED). |
+| `diagnose_failed_tx` | **"Why did my transaction fail?"** — plain-English diagnosis from on-chain facts: engine result → cause + concrete fix (~30-code catalog), hook rollback return-strings decoded and *interpreted* (the reward hook's "You must wait N seconds" becomes a claimable-at date), the partial-payment trap on "successful" Payments, and not-found triage (expired `LastLedgerSequence` / wrong network). 1 read. |
 | `validate_address` · `xaddress` | Validate classic/X-address (type, account-id, tag) · encode/decode X-addresses. |
 | `currency_code` · `ripple_time` | 3-char ISO ⇄ 160-bit currency · Ripple-time ⇄ Unix/ISO. |
 | `decode_amount` | Decode native drops / 8-byte / 48-byte issued STAmount / amount object → value+currency+issuer. |

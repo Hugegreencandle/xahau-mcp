@@ -32,9 +32,10 @@ import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, b
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
-import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT } from "./outputSchemas.js";
+import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT } from "./outputSchemas.js";
 import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
+import { diagnoseFailedTx } from "./diagnose.js";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,7 +53,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "1.7.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "1.8.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -730,6 +731,22 @@ server.registerTool("evernode_host_diagnostics", {
       getCloseTime: () => rpc.getLedger("validated", network as Net).then((x) => Number((x.ledger as Record<string, any>).close_time)),
     });
     return ok(r.summary, r as unknown as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("diagnose_failed_tx", {
+  description: "Why did my transaction fail? Plain-English diagnosis from ON-CHAIN facts: engine result decoded to cause + concrete fix (catalog of ~30 common Xahau failure codes), hook rollback return-strings decoded and interpreted (e.g. the genesis reward hook's 'You must wait N seconds' becomes a claimable-at date), the partial-payment trap on 'successful' Payments (delivered_amount vs Amount), and not-found triage (expired LastLedgerSequence / wrong network). 1 RPC read; authoritative — decodes what the chain recorded, re-executes nothing (use hook_execution_postmortem to replay hooks).",
+  inputSchema: { txHash: z.string().length(64).describe("transaction hash"), network: NET },
+  outputSchema: DIAGNOSE_TX_OUT,
+}, async ({ txHash, network }) => {
+  try {
+    const d = await diagnoseFailedTx(txHash, network as string, {
+      getTx: async (h) => {
+        try { return await rpc.getTx(h, network as Net); }
+        catch (e) { if (/txnNotFound|not found/i.test((e as Error).message)) return null; throw e; }
+      },
+    });
+    return ok(d.summary, d as unknown as Record<string, unknown>);
   } catch (e) { return fail((e as Error).message); }
 });
 

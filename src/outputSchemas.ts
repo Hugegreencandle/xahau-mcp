@@ -98,3 +98,13 @@ export const REWARD_STATUS_OUT = {
   unsignedTxPurpose: z.string().nullable().optional(),
   warnings: arr, notes: arr, ...err,
 };
+
+export const DIAGNOSE_TX_OUT = {
+  txHash: str, network: str, found: bool, validated: z.boolean().nullable().optional(),
+  engineResult: z.string().nullable().optional(), engineResultCode: z.number().nullable().optional(),
+  resultClass: z.string().nullable().optional(), failed: z.boolean().nullable().optional(),
+  summary: str, whatItTried: z.string().nullable().optional(),
+  causes: arr, fixes: arr, hookRejections: arr,
+  partialDelivery: z.record(z.string(), z.unknown()).nullable().optional(),
+  notes: arr, ...err,
+};
