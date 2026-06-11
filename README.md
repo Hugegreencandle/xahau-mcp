@@ -97,7 +97,6 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 | `currency_code` · `ripple_time` | 3-char ISO ⇄ 160-bit currency · Ripple-time ⇄ Unix/ISO. |
 | `decode_amount` | Decode native drops / 8-byte / 48-byte issued STAmount / amount object → value+currency+issuer. |
 | `decode_sign_request` | Decode a Xaman txjson or tx_blob → plain-English "what you authorize" + safety warnings. |
-| `scam_check` | Danger-score any sign request 0–100 → SAFE/CAUTION/DANGER + per-rule findings. |
 | `decode_lease_uri` | Decode an Evernode lease URIToken (`evrlease`/LTV) → lease index, EVR amount (XFL), ToS hash, IP. |
 | `evernode_host_diagnostics` | **One-call Evernode host health check** (the official troubleshooting checklist, automated): registration entry, heartbeat liveness vs the on-chain active rule, instance load, reputation, EVR trustline/balance, registration URIToken, lease offers, machine specs + accumulated EVR reward. Layout verified against the canonical `evernode-js-client` + a live mainnet host (~9 serial reads). |
 | `inspect_emitted_tx` | Decode a hook's `emit()` blobs → tx JSON + plain-English summary + danger score. |
@@ -143,7 +142,7 @@ Or clone and build:
 git clone https://github.com/Hugegreencandle/xahau-mcp && cd xahau-mcp
 npm install        # the `prepare` script compiles dist/ automatically
 npm run smoke      # health check + a live mainnet read
-npm test           # ~115 tests (offline)
+npm test           # 260 tests (offline)
 ```
 
 Also published to **GitHub Packages** as `@hugegreencandle/xahau-mcp`. GitHub Packages requires auth even for public installs, so add to your `.npmrc`:
@@ -163,9 +162,9 @@ Add to an MCP client (e.g. Claude Code / Desktop):
 Designed defensively and reviewed (`npm audit` + a danger-surface pass):
 
 - **Read-only & no key custody** — no `sign`/`submit` anywhere; builder tools never accept a secret and only emit *unsigned* transactions to sign offline.
-- **No code-exec surface** — no `eval`/`Function`, no `child_process`/shell, no filesystem writes, no dynamic `require`. RPC `fetch` only ever hits the fixed endpoints in `data/endpoints.json` (or your `XAHAU_RPC_URLS` override) — never a URL built from tool input, so no SSRF.
+- **No code-exec surface** — no `eval`/`Function`, no `child_process`/shell, no filesystem writes, no dynamic `require`. RPC `fetch` only ever hits the fixed endpoints in `data/endpoints.json` (or your `XAHAU_RPC_URLS` / `XAHAU_TEST_RPC_URLS` overrides for mainnet/testnet) — never a URL built from tool input, so no SSRF.
 - **Untrusted Hook WASM is sandboxed** — `execute_hook`/`fuzz_hook` run hook bytecode in Node's WebAssembly engine, which has no syscall/fs/network access; a hook can only call the in-memory JS Hook-API shims, with bounds-checked memory reads/writes.
-- **Known limits (DoS-of-self, not RCE/exfil):** the VM has no fuel metering beyond guards, so a pathological *unguarded* infinite-loop hook can hang a single run — just cancel it. Tool output is data, not instructions (treat it as such, as with any MCP).
+- **Untrusted-bytecode hardening:** before executing a hook the VM refuses modules with an unguarded loop (more loops than `_g` guard call-sites), with an opcode-scan that couldn't verify the loops, over 128 KiB of bytecode, or declaring more than 512 memory pages; guarded loops are bounded by a cumulative guard budget + wall-clock cap. So an attacker-supplied hook can't hang or OOM a run. Tool output is data, not instructions (treat it as such, as with any MCP).
 - **Dependencies:** `npm audit` reports only low-severity advisories transitively under `xrpl-accountlib`'s signing libraries (elliptic/bip32/tiny-secp256k1) — code paths this server never calls (it uses only the binary codec).
 
 ## How it works

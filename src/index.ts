@@ -903,11 +903,11 @@ server.registerTool("build_import_unsigned", {
 
 server.registerTool("build_payment_unsigned", {
   description: "Assemble an UNSIGNED XAH Payment (amount in drops). Returns unsigned JSON + offline signing instructions + payload preflight. Never signs; testnet by default.",
-  inputSchema: { account: z.string().min(25), destination: z.string().min(25), amountXahDrops: z.string(), destinationTag: z.number().optional(), network: NET.default("testnet") },
-}, async (a) => { try { const r = buildPaymentUnsigned(a as any); return ok(`unsigned Payment ${a.amountXahDrops} drops → ${a.destination} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
+  inputSchema: { account: z.string().min(25), destination: z.string().min(25), amountDrops: z.string().describe("native amount in DROPS (1 XAH = 1,000,000 drops); use xah_amount to convert XAH→drops"), destinationTag: z.number().optional(), network: NET.default("testnet") },
+}, async (a) => { try { const r = buildPaymentUnsigned(a as any); return ok(`unsigned Payment ${a.amountDrops} drops → ${a.destination} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
 
 server.registerTool("prepare_transaction", {
-  description: "Autofill an unsigned transaction with live network values — Sequence (from the account), Fee (current base fee), LastLedgerSequence (now + offset), and NetworkID — so it's ready to sign OFFLINE. Read-only: fetches values, fills the tx, but NEVER signs or submits.",
+  description: "Autofill an unsigned transaction with live network values — Sequence (from the account), Fee (current base fee), LastLedgerSequence (now + offset), and NetworkID — so it's ready to sign OFFLINE. Read-only: fetches values, fills the tx, but NEVER signs or submits. Defaults to TESTNET — pass network:'mainnet' for a mainnet account (else you get a mainnet account's testnet Sequence/NetworkID or actNotFound).",
   inputSchema: { tx: z.record(z.string(), z.unknown()).describe("unsigned tx JSON; must include Account + TransactionType"), lastLedgerOffset: z.number().default(20), network: NET.default("testnet") },
 }, async ({ tx, lastLedgerOffset, network }) => {
   try {
