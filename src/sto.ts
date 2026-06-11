@@ -64,21 +64,31 @@ function parseHeader(b: Uint8Array, p: number): { typeCode: number; fieldCode: n
 
 export interface FullField { code: number; typeCode: number; fieldCode: number; start: number; end: number; }
 
-/** Walk every top-level field, returning its FULL byte range (header + value). null if unparseable. */
-export function stoFields(blob: Uint8Array): FullField[] | null {
+/** Walk top-level fields, stopping at the first one this walker can't size exactly (e.g. PathSet).
+ *  Returns the fields collected so far plus `complete` = whether the whole blob parsed. Callers that
+ *  need the partial set (so fields BEFORE the unparseable one are still usable) use this directly;
+ *  `complete:false` is the signal that the reconstruction is degraded. */
+export function stoFieldsPartial(blob: Uint8Array): { fields: FullField[]; complete: boolean } {
   const out: FullField[] = [];
   let p = 0;
   for (let guard = 0; guard < 100000 && p < blob.length; guard++) {
     const start = p;
     const hdr = parseHeader(blob, p);
-    if (!hdr) return null;
+    if (!hdr) return { fields: out, complete: false };
     const vl = valueLength(blob, hdr.next, hdr.typeCode);
-    if (!vl) return null;
+    if (!vl) return { fields: out, complete: false };
     const end = hdr.next + vl.vlHeader + vl.len;
     out.push({ code: (hdr.typeCode << 16) | hdr.fieldCode, typeCode: hdr.typeCode, fieldCode: hdr.fieldCode, start, end });
     p = end;
   }
-  return out;
+  return { fields: out, complete: true };
+}
+
+/** Walk every top-level field, returning its FULL byte range (header + value). null if ANY field is
+ *  unparseable (strict — used by sto_emplace/erase/validate where a partial result would corrupt). */
+export function stoFields(blob: Uint8Array): FullField[] | null {
+  const { fields, complete } = stoFieldsPartial(blob);
+  return complete ? fields : null;
 }
 
 /** sto_emplace: return `blob` with `fieldBytes` (a complete serialized field, header+value) inserted/

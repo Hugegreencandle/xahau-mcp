@@ -52,7 +52,9 @@ function ok(text: string, structured: Record<string, unknown>) {
   return { content: [{ type: "text" as const, text }], structuredContent: structured };
 }
 function fail(text: string, structured: Record<string, unknown> = {}) {
-  return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
+  // isError marks this as a failed tool call so MCP clients (and agents) don't treat the error
+  // payload as data. The SDK also skips outputSchema validation on isError results.
+  return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured }, isError: true as const };
 }
 
 const server = new McpServer({ name: "xahau-mcp", version: "2.0.0" });
@@ -730,7 +732,12 @@ server.registerTool("evernode_host_diagnostics", {
           const e = await rpc.getLedgerEntry({ hook_state: { account: gov, key, namespace_id: EVERNODE_HOOK_NAMESPACE } }, network as Net);
           const d = (e.node as Record<string, unknown>)?.HookStateData;
           return typeof d === "string" && d.length ? d : null;
-        } catch { return null; }
+        } catch (err) {
+          // entryNotFound = the state genuinely doesn't exist (null); any other failure = unavailable
+          // (undefined) so the diagnostics layer doesn't misreport a node hiccup as "not registered".
+          if (/entryNotFound/i.test((err as Error).message)) return null;
+          return undefined;
+        }
       },
       getLines: (a) => rpc.getAccountLines(a, network as Net).then((x) => x.lines),
       getUriTokens: (a) => rpc.getAccountObjects(a, network as Net, "uri_token").then((x) => x.account_objects),
@@ -759,18 +766,21 @@ server.registerTool("diagnose_failed_tx", {
 
 /** Shared live wiring for the flight simulator (simulate_transaction / what_if). */
 function simDeps(network: Net, ledgerIndex?: number): SimDeps {
-  const li = ledgerIndex !== undefined ? { ledger_index: ledgerIndex } : {};
+  // Pin EVERY read to the simulation ledger. For what_if this is the pre-execution ledger, so the
+  // installed hook chain, hook definitions, parameters and account balance/sequence are read AS THEY
+  // WERE — not from today's validated ledger (which would replay yesterday's tx against today's hooks).
+  const li = ledgerIndex !== undefined ? { ledger_index: ledgerIndex } : { ledger_index: "validated" as const };
   return {
     getAccountHooks: async (a) => {
-      const r = await rpc.getAccountObjects(a, network, "hook");
+      const r = await rpc.rpc<{ account_objects: Record<string, any>[] }>("account_objects", { account: a, type: "hook", ...li }, network);
       const hookObj = r.account_objects.find((o: any) => o.LedgerEntryType === "Hook") as any;
       return (hookObj?.Hooks ?? []) as Record<string, any>[];
     },
     getHookDefinition: async (hash) => {
-      try { const r = await rpc.getLedgerEntry({ hook_definition: hash }, network); return r.node as Record<string, any>; }
+      try { const r = await rpc.rpc<{ node: Record<string, any> }>("ledger_entry", { hook_definition: hash, ...li }, network); return r.node as Record<string, any>; }
       catch { return null; }
     },
-    getAccountInfo: async (a) => { try { return await rpc.getAccountInfo(a, network); } catch { return null; } },
+    getAccountInfo: async (a) => { try { return await rpc.rpc<{ account_data: Record<string, unknown> }>("account_info", { account: a, ...li }, network); } catch { return null; } },
     getHookState: async (acc, ns, key) => {
       const rAddr = accountIdToR(acc) ?? acc;
       try {

@@ -13,7 +13,7 @@
 //  - We never sign/submit. This module touches no network; callers feed it fixtures or pre-fetched
 //    transaction JSON + HookExecution entries.
 import { encodeTxBlob } from "./codec.js";
-import { stoFields, stoFieldRange } from "./sto.js";
+import { stoFieldsPartial, stoFieldRange } from "./sto.js";
 import { runHook, type SandboxContext, type SandboxResult } from "./sandbox.js";
 import { readWasm, hexToBytes } from "./wasm.js";
 import { validateAddress } from "./util.js";
@@ -81,18 +81,21 @@ export function reconstructContext(tx: Record<string, unknown>, hookAccountId: s
 
   const otxnFields: Record<string, string> = {};
   let otxnBlob: string | undefined;
+  let otxnFieldsIncomplete = false;
   try {
     const { txBlobHex } = encodeTxBlob(tx);
     otxnBlob = txBlobHex.toUpperCase();
     const blob = hexToBytes(txBlobHex);
-    const fields = stoFields(blob);
-    if (fields) {
-      for (const f of fields) {
-        // f.code is already (typeCode<<16)|fieldCode. Get the VALUE byte-range (skips header/VL prefix).
-        const r = stoFieldRange(blob, f.code);
-        if (!r) continue; // a field whose value sto.ts can't size exactly — skip (don't guess)
-        otxnFields[String(f.code)] = hex(blob.slice(r.start, r.start + r.len));
-      }
+    // Partial walk: collect every field up to the first one the byte-walker can't size (e.g. PathSet).
+    // Fields before it (Account/Amount/Destination — all lower sfield codes) are still reconstructed;
+    // `complete:false` flags the run degraded so a hook reading a dropped field isn't scored as faithful.
+    const { fields, complete } = stoFieldsPartial(blob);
+    otxnFieldsIncomplete = !complete;
+    for (const f of fields) {
+      // f.code is already (typeCode<<16)|fieldCode. Get the VALUE byte-range (skips header/VL prefix).
+      const r = stoFieldRange(blob, f.code);
+      if (!r) continue; // a field whose value sto.ts can't size exactly — skip (don't guess)
+      otxnFields[String(f.code)] = hex(blob.slice(r.start, r.start + r.len));
     }
   } catch {
     // un-encodable tx (e.g. partial JSON): leave otxnFields empty; the run will simply see no fields.
@@ -101,6 +104,7 @@ export function reconstructContext(tx: Record<string, unknown>, hookAccountId: s
   return {
     txType,
     hookAccountId,
+    otxnFieldsIncomplete,
     ledgerSeq: Number.isFinite(ledgerSeq) ? ledgerSeq : undefined,
     ledgerLastTime: typeof ledgerLastTime === "number" ? ledgerLastTime : (typeof tx.date === "number" ? tx.date : undefined),
     state: state && Object.keys(state).length ? { ...state } : undefined,
