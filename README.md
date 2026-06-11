@@ -8,6 +8,8 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server for the **[Xa
 
 Point any MCP-capable agent (Claude, etc.) at this server and it can:
 
+- **See the future before signing** — `simulate_transaction` is a pre-sign **flight simulator**: every hook an unsigned transaction would trigger runs as real bytecode against live ledger state, with per-hook accept/rollback, decoded emitted transactions, simulated state writes and labeled static engine preflights. Its sibling `what_if` is a **time machine**: replay any real historical transaction — with your modifications — at its original ledger. Verified to reproduce a real claim's emitted `GenesisMint` payout **to the drop** (72,251,963 drops), test-locked.
+
 - **Run a Hook without deploying it** — `execute_hook` instantiates the real CreateCode WASM in a local VM, supplies the Hook API over a *simulated* transaction + ledger state, and reports the actual `accept`/`rollback` decision, return code/string, state writes, emitted transactions and a call trace. The first dev-accessible Hook simulator that needs no `xahaud` node.
 - **Audit a Hook before it's installed** — paste the CreateCode WASM (or an on-ledger hook hash) and get SARIF-lite findings: missing `accept`/`rollback` exit, unguarded loops (`_g`), unknown `env` imports, dangerous `HookGrant`s, over-broad `HookOn`, and more.
 - **Decode the cryptic `HookOn` bitmap** in both directions — the 256-bit, inverted, active-low mask (with the active-high SetHook bit) is easy to get wrong; here it's verified and round-trip-tested.
@@ -62,6 +64,8 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 | Tool | Purpose |
 |---|---|
 | `execute_hook` | **Run the real Hook bytecode in a local VM** against a simulated tx/state → actual accept/rollback, return code, state writes, emits, trace (`LOCAL_VM`). |
+| `simulate_transaction` | **PRE-SIGN FLIGHT SIMULATOR** — predict an unsigned tx's fate: originator + stakeholder hook chains (order canonical from xahaud `Transactor.cpp`/`applyHook.cpp`) run as real bytecode against live state; per-hook verdicts, decoded emits, state writes, static engine preflights, scam score. |
+| `what_if` | **TIME MACHINE** — fetch a real historical tx, apply your overrides, re-simulate at its original ledger. Reproduces the real reward claim's `GenesisMint` to the drop (test-locked). |
 | `fuzz_hook` | **Differential fuzzing**: sweep many generated transactions through the VM to map the hook's accept/rollback **decision boundary** (which tx types / amounts it accepts vs rejects). |
 | `annotate_hook_trace` | **Decode an `execute_hook` `trace[]`** into human-readable values by byte-width: canonical XFL float (`definite`), int64/native-drops (both endians), UInt32 + Ripple-epoch date, candidate account-id → r-address (`possible`), 32-byte hash. Raw hex always preserved; offline. |
 | `hook_report` | **One-call full report**: structure + plain-English classification + security findings + fee. |

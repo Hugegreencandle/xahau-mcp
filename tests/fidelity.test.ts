@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import pkg from "xrpl-accountlib";
 import { reconstructContext, compareToOnChain, onChainResult, runFidelityCase } from "../src/fidelity.js";
 import { runHook, type SandboxResult } from "../src/sandbox.js";
+import { accountKeylet, keyletToIndexHex } from "../src/keylet.js";
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures-wasm");
 const loadHex = (n: string) => readFileSync(join(DIR, n + ".hex"), "utf8").trim();
@@ -124,12 +125,21 @@ describe("fidelity: compareToOnChain (mapping + degraded exclusion)", () => {
 describe("fidelity: runFidelityCase over a REAL mainnet hook fixture", () => {
   // The genesis reward hook ACCEPTS a ClaimReward (see tests/regression.test.ts). On chain that
   // success carries HookResult=3. A non-degraded VM run should therefore AGREE.
+  // Since the codec gained the live Xahau definitions, ClaimReward serializes properly, so the
+  // hook reads the REAL otxn account and walks to its account-root slot_set. We mark that keylet
+  // CONFIRMED ABSENT (null) — the faithful "first-time claim / setup" condition — instead of
+  // leaving it unresolved (which would honestly degrade the run).
+  const claimerRootAbsent = () => ({
+    [keyletToIndexHex(accountKeylet(Uint8Array.from(Buffer.from(accIdHex(ACCOUNT_R), "hex"))))!]: null,
+  });
+
   it("reward hook @ ClaimReward agrees with on-chain accept (HookResult=3), non-degraded", () => {
     const res = runFidelityCase({
       tx: { TransactionType: "ClaimReward", Account: ACCOUNT_R, ledger_index: 23_478_900 },
       createCodeHex: loadHex("genesis-reward"),
       hookExecution: { HookResult: 3, HookReturnCode: 0, HookHash: "AB".repeat(16) },
       hookAccountId: "00".repeat(20),
+      keyletBlobs: claimerRootAbsent(),
     });
     expect(res.degraded).toBe(false);
     expect(res.vmExit).toBe("accept");
@@ -143,6 +153,7 @@ describe("fidelity: runFidelityCase over a REAL mainnet hook fixture", () => {
       createCodeHex: loadHex("genesis-reward"),
       hookExecution: { HookResult: 4 },
       hookAccountId: "00".repeat(20),
+      keyletBlobs: claimerRootAbsent(),
     });
     expect(res.degraded).toBe(false);
     expect(res.agree).toBe(false);

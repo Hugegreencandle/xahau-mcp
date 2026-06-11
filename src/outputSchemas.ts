@@ -108,3 +108,11 @@ export const DIAGNOSE_TX_OUT = {
   partialDelivery: z.record(z.string(), z.unknown()).nullable().optional(),
   notes: arr, ...err,
 };
+
+export const SIMULATE_OUT = {
+  verdict: str, summary: str, ledgerIndex: num, historical: bool,
+  hookRuns: arr, staticChecks: arr,
+  scamScore: z.record(z.string(), z.unknown()).nullable().optional(),
+  notes: arr, caveat: str,
+  baseTxHash: str, overriddenFields: arr, ...err,
+};

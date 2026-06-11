@@ -1,8 +1,20 @@
-// Xahau binary codec helpers, backed by xrpl-accountlib's Xahau-aware binary codec.
+// Xahau binary codec helpers, backed by xrpl-accountlib's binary codec loaded with the LIVE Xahau
+// definitions (data/definitions.json, fetched from a Xahau node's server_definitions) — so
+// Xahau-only transaction types (ClaimReward, Invoke, Import, URIToken*, Remit, ...) and fields
+// (RewardAccumulator, ...) encode/decode correctly, not just the XRPL-common subset.
 // Encode/decode are used for INSPECTION only — nothing here signs or submits.
 import pkg from "xrpl-accountlib";
 import { decodeHookOn } from "./hookon.js";
-const { binary } = pkg as unknown as { binary: { encode: (tx: object) => string; decode: (hex: string) => Record<string, unknown> } };
+import { DEFINITIONS, DEFS_AVAILABLE } from "./defs.js";
+const { binary, XrplDefinitions } = pkg as unknown as {
+  binary: { encode: (tx: object, definitions?: unknown) => string; decode: (hex: string, definitions?: unknown) => Record<string, unknown> };
+  XrplDefinitions: new (defs: unknown) => unknown;
+};
+// Build once. Falls back to the library's defaults if the data file is missing.
+const XAHAU_DEFS: unknown = (() => {
+  try { return DEFS_AVAILABLE ? new XrplDefinitions(DEFINITIONS as unknown) : undefined; }
+  catch { return undefined; }
+})();
 
 const DROPS_PER_XAH = 1_000_000n;
 
@@ -19,11 +31,11 @@ export function xahAmount(value: string | number, from: "xah" | "drops"): { xah:
 }
 
 export function decodeTxBlob(txBlobHex: string): Record<string, unknown> {
-  return binary.decode(txBlobHex.trim().replace(/^0x/i, ""));
+  return binary.decode(txBlobHex.trim().replace(/^0x/i, ""), XAHAU_DEFS);
 }
 
 export function encodeTxBlob(tx: object): { txBlobHex: string } {
-  return { txBlobHex: binary.encode(tx) };
+  return { txBlobHex: binary.encode(tx, XAHAU_DEFS) };
 }
 
 export interface DecodedHook {

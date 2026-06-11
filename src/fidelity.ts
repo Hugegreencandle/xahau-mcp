@@ -74,7 +74,7 @@ export function onChainResult(he: OnChainHookExecution): { decision: "accept" | 
  *   `otxn_field(wp,wl,fid)` reads: it looks up `ctx.otxnFields[String(fid)]` where `fid` is the
  *   sfield code the hook passes in. (Verified in src/sandbox.ts.)
  */
-export function reconstructContext(tx: Record<string, unknown>, hookAccountId: string, ledgerLastTime?: number, state?: Record<string, string>, foreignState?: Record<string, string | null>, keyletBlobs?: Record<string, string>, hookParams?: Record<string, string>): SandboxContext {
+export function reconstructContext(tx: Record<string, unknown>, hookAccountId: string, ledgerLastTime?: number, state?: Record<string, string>, foreignState?: Record<string, string | null>, keyletBlobs?: Record<string, string | null>, hookParams?: Record<string, string>): SandboxContext {
   const txType = tx.TransactionType as string | undefined;
   const ledgerIndex = tx.ledger_index;
   const ledgerSeq = typeof ledgerIndex === "number" ? ledgerIndex : typeof ledgerIndex === "string" ? Number(ledgerIndex) : undefined;
@@ -171,7 +171,7 @@ export interface FidelityCase {
   ledgerLastTime?: number; // parent-ledger close time (Ripple time) so ledger_last_time() is real, not degraded
   state?: Record<string, string>; // pre-execution on-chain hook state (32-byte key hex -> value hex)
   foreignState?: Record<string, string | null>; // "ACCOUNTID|NAMESPACE|KEY" -> value hex, null = confirmed absent at the prior ledger
-  keyletBlobs?: Record<string, string>; // ledger-object index hex -> serialized object hex at the prior ledger (for slot_set)
+  keyletBlobs?: Record<string, string | null>; // ledger-object index hex -> serialized object hex at the prior ledger (for slot_set); null = confirmed absent
   hookParams?: Record<string, string>; // INSTALLED hook parameters (Hook object, falling back to HookDefinition defaults): name hex -> value hex
   otxnId?: string; // the real originating tx hash (so otxn_id() serves the true value, not a sentinel)
 }
@@ -234,7 +234,7 @@ export interface CorpusCase {
   ledgerCloseTime?: number; // Ripple time of the ledger close (feeds ledger_last_time)
   hookState?: Record<string, string>; // pre-execution on-chain hook state (key hex -> value hex)
   foreignState?: Record<string, string | null>; // pre-execution foreign state the hook reads ("ACCOUNTID|NAMESPACE|KEY" -> hex, null = confirmed absent)
-  keyletBlobs?: Record<string, string>; // pre-execution serialized ledger objects the hook slots (index hex -> blob hex)
+  keyletBlobs?: Record<string, string | null>; // pre-execution serialized ledger objects the hook slots (index hex -> blob hex; null = confirmed absent)
   installedHookParams?: Record<string, Record<string, string>>; // hookHash -> installed params (name hex -> value hex)
   tx: Record<string, unknown>;
   hookAccount: string; // r-address the hook(s) are installed on

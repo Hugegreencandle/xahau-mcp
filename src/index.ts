@@ -32,11 +32,12 @@ import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, b
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
-import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT } from "./outputSchemas.js";
+import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT } from "./outputSchemas.js";
 import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { diagnoseFailedTx } from "./diagnose.js";
 import { decodeGovernance } from "./governanceDecode.js";
+import { simulateTransaction, type SimDeps } from "./simulate.js";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,7 +55,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "1.9.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "2.0.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -748,6 +749,84 @@ server.registerTool("diagnose_failed_tx", {
       },
     });
     return ok(d.summary, d as unknown as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message); }
+});
+
+
+/** Shared live wiring for the flight simulator (simulate_transaction / what_if). */
+function simDeps(network: Net, ledgerIndex?: number): SimDeps {
+  const li = ledgerIndex !== undefined ? { ledger_index: ledgerIndex } : {};
+  return {
+    getAccountHooks: async (a) => {
+      const r = await rpc.getAccountObjects(a, network, "hook");
+      const hookObj = r.account_objects.find((o: any) => o.LedgerEntryType === "Hook") as any;
+      return (hookObj?.Hooks ?? []) as Record<string, any>[];
+    },
+    getHookDefinition: async (hash) => {
+      try { const r = await rpc.getLedgerEntry({ hook_definition: hash }, network); return r.node as Record<string, any>; }
+      catch { return null; }
+    },
+    getAccountInfo: async (a) => { try { return await rpc.getAccountInfo(a, network); } catch { return null; } },
+    getHookState: async (acc, ns, key) => {
+      const rAddr = accountIdToR(acc) ?? acc;
+      try {
+        const r = await rpc.rpc<{ node?: Record<string, unknown> }>("ledger_entry", { hook_state: { account: rAddr, key, namespace_id: ns }, ...(ledgerIndex !== undefined ? { ledger_index: ledgerIndex } : { ledger_index: "validated" }) }, network);
+        const d = r.node?.HookStateData;
+        return typeof d === "string" ? d.toUpperCase() : undefined;
+      } catch (e) {
+        if (/entryNotFound/i.test((e as Error).message)) return null; // confirmed absent
+        return undefined;
+      }
+    },
+    getLedgerObject: async (idx) => {
+      try {
+        const r = await rpc.rpc<{ node_binary?: string; node?: { node_binary?: string } }>("ledger_entry", { index: idx, binary: true, ...(ledgerIndex !== undefined ? { ledger_index: ledgerIndex } : { ledger_index: "validated" }) }, network);
+        const b = r.node_binary ?? r.node?.node_binary;
+        return typeof b === "string" ? b.toUpperCase() : undefined;
+      } catch (e) {
+        if (/entryNotFound/i.test((e as Error).message)) return null; // confirmed absent — faithful DOESNT_EXIST
+        return undefined; // unavailable (rate limit etc.) — stays degraded
+      }
+    },
+    getLedgerInfo: async () => {
+      const r = await rpc.getLedger(ledgerIndex ?? "validated", network);
+      const l = r.ledger as Record<string, any>;
+      return { ledgerIndex: Number(l.ledger_index), closeTime: Number(l.close_time) };
+    },
+    getFee: async () => { try { const f = await rpc.getFee(network) as Record<string, any>; return Number(f?.drops?.base_fee ?? 100000); } catch { return 100000; } },
+  };
+}
+
+server.registerTool("simulate_transaction", {
+  description: "THE PRE-SIGN FLIGHT SIMULATOR — predict what Xahau will do with an UNSIGNED transaction before you sign it. Every hook the tx would trigger (originator chain first, then strong/weak transactional stakeholders — order canonical from xahaud Transactor.cpp/applyHook.cpp) runs as REAL bytecode against LIVE ledger state in the local VM (measured 100% agreement on 30/30 real mainnet executions). Reports per-hook accept/rollback + return strings, simulated state writes, decoded emitted transactions, labeled STATIC engine preflights (sequence/balance/destination/expiry), and a scam score. Never signs, never submits. Slow but thorough (iterative state resolution, ~1.1s per read).",
+  inputSchema: { tx: z.record(z.string(), z.unknown()).describe("unsigned transaction JSON (TransactionType, Account, ...)"), network: NET },
+  outputSchema: SIMULATE_OUT,
+}, async ({ tx, network }) => {
+  try {
+    const s = await simulateTransaction(tx as Record<string, unknown>, simDeps(network as Net));
+    return ok(s.summary, s as unknown as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("what_if", {
+  description: "TIME MACHINE — counterfactual replay of a REAL historical transaction: fetch it by hash, apply your field overrides (different Amount, Destination, params, ...), then run the full flight simulator AT THAT HISTORICAL LEDGER (hooks, state and parameters as they were). Answers 'what would have happened if this tx had been X?'. Read-only; nothing is signed or submitted.",
+  inputSchema: {
+    txHash: z.string().length(64).describe("real validated transaction hash"),
+    overrides: z.record(z.string(), z.unknown()).optional().describe("fields to change on the tx before re-simulating (e.g. {\"Amount\": \"99000000\"})"),
+    network: NET,
+  },
+  outputSchema: SIMULATE_OUT,
+}, async ({ txHash, overrides, network }) => {
+  try {
+    const real = await rpc.getTx(txHash, network as Net) as Record<string, any>;
+    const base = (real.tx_json ?? real) as Record<string, any>;
+    const ledgerIndex = Number(real.ledger_index ?? base.ledger_index);
+    if (!Number.isFinite(ledgerIndex)) return fail("could not determine the tx's ledger index");
+    const tx: Record<string, unknown> = { ...base, ...(overrides ?? {}) };
+    for (const k of ["TxnSignature", "SigningPubKey", "hash", "meta", "metaData", "date", "inLedger", "ledger_index", "validated"]) delete tx[k];
+    const deps = simDeps(network as Net, ledgerIndex - 1); // pre-execution ledger, like the fidelity harness
+    const s = await simulateTransaction(tx, deps, { ledgerIndex: ledgerIndex - 1 });
+    return ok(`WHAT-IF @ ledger ${ledgerIndex - 1}${overrides && Object.keys(overrides).length ? ` with ${Object.keys(overrides).join(", ")} overridden` : " (faithful replay)"}: ${s.summary}`, { ...s, baseTxHash: txHash, overriddenFields: Object.keys(overrides ?? {}) } as unknown as Record<string, unknown>);
   } catch (e) { return fail((e as Error).message); }
 });
 
