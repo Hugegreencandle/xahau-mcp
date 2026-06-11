@@ -373,7 +373,11 @@ server.registerTool("scam_check", {
 
 /* ===================== Tier C — Hook intelligence (the moat, offline) ===================== */
 
-const WASM_IN = { wasmHex: z.string().optional(), wasmBase64: z.string().optional() };
+// 128 KiB byte ceiling (see MAX_WASM_BYTES in sandbox.ts) → 256 Ki hex chars / ~180 K base64 chars.
+const WASM_IN = {
+  wasmHex: z.string().max(262_144, "wasmHex too large (>128 KiB of bytecode)").optional(),
+  wasmBase64: z.string().max(180_000, "wasmBase64 too large (>128 KiB of bytecode)").optional(),
+};
 
 server.registerTool("inspect_hook_wasm", {
   description: "Parse a Hook's CreateCode WASM (hex or base64): imports (Hook API functions), exports (hook/cbak), memory, custom sections, loop and guard(_g) counts. Offline, never executes the module.",
