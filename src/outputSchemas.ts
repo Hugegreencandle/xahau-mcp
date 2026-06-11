@@ -75,3 +75,15 @@ export const DECODE_XPOP_OUT = {
   targetNetworkId: z.number().nullable().optional(), metaPresent: bool, proofPresent: bool,
   validators: z.record(z.string(), z.unknown()).nullable().optional(), warnings: arr, summary: str, ...err,
 };
+
+export const REWARD_STATUS_OUT = {
+  address: str, network: str, optedIn: bool, summary: str,
+  balanceXah: z.number().nullable().optional(),
+  fields: z.record(z.string(), z.unknown()).nullable().optional(),
+  params: obj,
+  eligibility: z.record(z.string(), z.unknown()).nullable().optional(),
+  accrual: z.record(z.string(), z.unknown()).nullable().optional(),
+  unsignedTx: z.record(z.string(), z.unknown()).nullable().optional(),
+  unsignedTxPurpose: z.string().nullable().optional(),
+  warnings: arr, notes: arr, ...err,
+};

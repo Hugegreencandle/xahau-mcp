@@ -4,5 +4,12 @@
  "governanceSeats": 20,
  "rewardDelayLedgers": 2600000,
  "rewardRateMonthly_doc": 0.00333333333,
- "caveat": "rewardDelayLedgers and rewardRateMonthly are documented defaults; the live Genesis hook state is authoritative and may differ. Verify with governance_state / live account fields before relying on a figure."
+ "caveat": "rewardDelayLedgers and rewardRateMonthly are documented defaults; the live Genesis hook state is authoritative and may differ. Verify with governance_state / live account fields before relying on a figure.",
+ "rewardDelaySeconds": 2600000,
+ "_unitCorrection": "rewardDelayLedgers is legacy-misnamed (kept for compatibility): the genesis reward hook's RD parameter is SECONDS, not ledgers (reward.c gates on ledger_last_time() - RewardTime >= RD). 2,600,000 s ~= 30.09 days. Verified against Xahau/xahaud hook/genesis/reward.c 2026-06-11.",
+ "genesisHookStateKeys": {
+  "rewardRate": "RR",
+  "rewardDelay": "RD",
+  "note": "32-byte hook state keys, ASCII right-aligned zero-left-padded, in the genesis account's zero namespace; values are 8-byte little-endian XFL."
+ }
 }

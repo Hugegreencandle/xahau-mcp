@@ -53,7 +53,10 @@ export const ENDPOINTS: Endpoints = has("endpoints.json")
 export interface Governance {
   genesisAccount: string;
   governanceSeats: number;
+  /** LEGACY-MISNAMED (kept for compatibility): the value is SECONDS, not ledgers — see rewardDelaySeconds. */
   rewardDelayLedgers: number;
+  /** Genesis reward hook RD parameter in seconds (reward.c gates on ledger_last_time() - RewardTime >= RD). */
+  rewardDelaySeconds?: number;
   rewardRateMonthly_doc: number;
   caveat: string;
 }

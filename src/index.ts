@@ -32,7 +32,8 @@ import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, b
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
-import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT } from "./outputSchemas.js";
+import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT } from "./outputSchemas.js";
+import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,7 +51,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "1.4.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "1.5.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -643,7 +644,7 @@ server.registerTool("hook_api_lookup", {
 /* ===================== Tier D — economics / governance ===================== */
 
 server.registerTool("compute_reward", {
-  description: "Project claimable XAH network reward using the documented time-weighted model. Supply reward fields directly, or an address to read them live. Labelled DOCUMENTED_MODEL.",
+  description: "Project claimable XAH network reward using the documented time-weighted model. Supply reward fields directly, or an address to read them live. Labelled DOCUMENTED_MODEL. LEGACY approximation — prefer reward_status, which applies the exact genesis reward-hook formula with live parameters.",
   inputSchema: {
     balanceXAH: z.number().optional(), rewardAccumulator: z.number().optional(),
     rewardLgrFirst: z.number().optional(), currentLedger: z.number().optional(),
@@ -663,6 +664,24 @@ server.registerTool("compute_reward", {
     if (bal === undefined || first === undefined || cur === undefined) return fail("need balanceXAH, rewardLgrFirst and currentLedger (or an address to read them live)");
     const res = computeReward({ balanceXAH: bal, rewardAccumulator: acc, rewardLgrFirst: first, currentLedger: cur });
     return ok(`${res.eligibleToClaim ? "claimable" : "not yet eligible"}: ~${res.claimableXAH} XAH (${res.fidelity})`, res);
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("reward_status", {
+  description: "Balance Adjustment doctor — the full answer to Xahau's most common retail question: is this account opted in to network rewards, how much XAH is accrued (EXACT genesis reward-hook formula — reward.c — with live RR/RD read from genesis hook state), when can it next claim, and is the claim overdue (late claiming forfeits yield — the hook pays the per-claim rate once regardless of wait). Returns an unsigned opt-in or claim ClaimReward when applicable. Read-only; 3 serial RPC reads.",
+  inputSchema: { address: z.string().min(25).describe("r-address"), network: NET },
+  outputSchema: REWARD_STATUS_OUT,
+}, async ({ address, network }) => {
+  try {
+    const r = await rewardStatus(address, network as Net, {
+      getAccountInfo: (a) => rpc.getAccountInfo(a, network as Net),
+      getGenesisNamespace: () => rpc.getAccountNamespace(GENESIS_ACCOUNT, GENESIS_NAMESPACE, network as Net).then((x) => x.namespace_entries),
+      getValidatedLedger: () => rpc.getLedger("validated", network as Net).then((x) => {
+        const l = x.ledger as Record<string, any>;
+        return { ledgerIndex: Number(l.ledger_index), closeTime: Number(l.close_time) };
+      }),
+    });
+    return ok(r.summary, r as unknown as Record<string, unknown>);
   } catch (e) { return fail((e as Error).message); }
 });
 
