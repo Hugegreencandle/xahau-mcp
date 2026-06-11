@@ -812,7 +812,7 @@ function simDeps(network: Net, ledgerIndex?: number): SimDeps {
 }
 
 server.registerTool("simulate_transaction", {
-  description: "THE PRE-SIGN FLIGHT SIMULATOR — predict what Xahau will do with an UNSIGNED transaction before you sign it. Every hook the tx would trigger (originator chain first, then strong/weak transactional stakeholders — order canonical from xahaud Transactor.cpp/applyHook.cpp) runs as REAL bytecode against LIVE ledger state in the local VM (measured 100% agreement on 30/30 real mainnet executions). Reports per-hook accept/rollback + return strings, simulated state writes, decoded emitted transactions, labeled STATIC engine preflights (sequence/balance/destination/expiry), and a scam score. Never signs, never submits. Slow but thorough (iterative state resolution, ~1.1s per read).",
+  description: "THE PRE-SIGN FLIGHT SIMULATOR — predict what Xahau will do with an UNSIGNED transaction before you sign it. Every hook the tx would trigger (originator chain first, then strong/weak transactional stakeholders — order canonical from xahaud Transactor.cpp/applyHook.cpp) runs as REAL bytecode against LIVE ledger state in the local VM (measured 100% agreement on 30 real mainnet hook executions — all accept-direction; rollback direction proven separately on real genesis bytecode). Reports per-hook accept/rollback + return strings, simulated state writes, decoded emitted transactions, labeled STATIC engine preflights (sequence/balance/destination/expiry), and a scam score. Never signs, never submits. Slow but thorough (iterative state resolution, ~1.1s per read).",
   inputSchema: { tx: z.record(z.string(), z.unknown()).describe("unsigned transaction JSON (TransactionType, Account, ...)"), network: NET },
   outputSchema: SIMULATE_OUT,
 }, async ({ tx, network }) => {
@@ -945,6 +945,8 @@ server.registerTool("vm_fidelity_report", {
       agreements: rep.agreements,
       agreementPct: rep.agreementPct,
       degradedCount: rep.degradedCount,
+      composition: rep.composition,
+      coverageWarning: rep.coverageWarning,
       insufficient: rep.insufficient,
       perHook: rep.perHook,
       corpus: rep.corpus,

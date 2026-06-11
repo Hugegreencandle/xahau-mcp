@@ -33,9 +33,13 @@ infrastructure) and standalone analyzers (e.g. Slither, which is EVM-only and no
    CreateCode WASM with no node, no cloud, no account. Not an ABI wrapper, not a hosted simulator.
 2. **Publishes a measured, regression-locked fidelity score against chain ground truth** —
    `vm_fidelity_report` replays 30 real mainnet hook executions: **30/30 agree (100%), 0 degraded**,
-   including the foreign-state-reading hook that dominates live traffic. The corpus, the method and
-   the honest history (25% → 0% → 100%) are in [docs/FIDELITY.md](docs/FIDELITY.md). We know of no
-   other blockchain MCP that even attempts this measurement.
+   including the foreign-state-reading hook that dominates live traffic. Those 30 are all
+   **accept-direction** (live Xahau traffic is heartbeat-dominated), and the metric says so itself —
+   it reports the accept/rollback composition and warns that an accept-only corpus can't distinguish
+   the VM from an always-accept stub. The **rollback** direction is exercised on real genesis bytecode
+   (governance `Invoke` → rollback) in [`tests/regression.test.ts`](tests/regression.test.ts).
+   The corpus, the method and the honest history (25% → 0% → 100%) are in
+   [docs/FIDELITY.md](docs/FIDELITY.md). We know of no other blockchain MCP that even attempts this.
 3. **In-protocol static security analysis** — a Hooks-specific rule engine (SARIF-lite findings),
    calibrated against the network's own genesis hooks.
 4. **In-protocol differential fuzzing** — `fuzz_hook` maps a contract's accept/reject decision
@@ -142,7 +146,7 @@ Or clone and build:
 git clone https://github.com/Hugegreencandle/xahau-mcp && cd xahau-mcp
 npm install        # the `prepare` script compiles dist/ automatically
 npm run smoke      # health check + a live mainnet read
-npm test           # 260 tests (offline)
+npm test           # 261 tests (offline)
 ```
 
 Also published to **GitHub Packages** as `@hugegreencandle/xahau-mcp`. GitHub Packages requires auth even for public installs, so add to your `.npmrc`:

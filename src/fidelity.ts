@@ -280,6 +280,8 @@ export interface FidelityReport {
   agreements: number;
   agreementPct: number | null; // agreements / comparable; null when comparable === 0
   degradedCount: number; // runs EXCLUDED because the VM run was degraded/halted/no-exit or on-chain indeterminate
+  composition: { accept: number; rollback: number; distinctHooks: number }; // direction split over COMPARABLE runs
+  coverageWarning: string | null; // set when the comparable set is single-direction (an always-<dir> VM would also pass)
   mismatches: FidelityMismatch[];
   perHook: PerHookBreakdown[];
   corpus: {
@@ -324,6 +326,9 @@ export function fidelityReport(corpus: HookCorpus): FidelityReport {
   let comparable = 0;
   let agreements = 0;
   let degradedCount = 0;
+  let acceptComparable = 0;
+  let rollbackComparable = 0;
+  const comparableHooks = new Set<string>();
   const mismatches: FidelityMismatch[] = [];
   const perHookMap = new Map<string, { total: number; comparable: number; agreements: number; degraded: number }>();
 
@@ -375,6 +380,9 @@ export function fidelityReport(corpus: HookCorpus): FidelityReport {
       }
       comparable++;
       bucket.comparable++;
+      if (res.onChainResult === "accept") acceptComparable++;
+      else if (res.onChainResult === "rollback") rollbackComparable++;
+      if (hash) comparableHooks.add(hash);
       if (res.agree) {
         agreements++;
         bucket.agreements++;
@@ -395,10 +403,21 @@ export function fidelityReport(corpus: HookCorpus): FidelityReport {
 
   const agreementPct = comparable > 0 ? round1(100 * agreements / comparable) : null;
   const insufficient = comparable < MIN_COMPARABLE;
+  const composition = { accept: acceptComparable, rollback: rollbackComparable, distinctHooks: comparableHooks.size };
+
+  // A single-direction comparable set can't distinguish the VM from a constant-output stub: if every
+  // scored run accepted, an unconditional-accept VM would also score 100% (and vice-versa). Surface
+  // that explicitly — the OTHER direction is exercised on real genesis bytecode in tests/regression.ts
+  // (governance Invoke -> rollback, reward ClaimReward -> accept), which the corpus metric doesn't include.
+  let coverageWarning: string | null = null;
+  if (!insufficient) {
+    if (rollbackComparable === 0) coverageWarning = `all ${comparable} comparable runs are ACCEPT-direction — an unconditional-accept VM would also score ${agreementPct}%. Rollback direction is exercised separately on real genesis bytecode (governance Invoke -> rollback) in tests/regression.test.ts; broadening the corpus with on-chain rollbacks (tecHOOK_REJECTED, HookResult=4) is tracked.`;
+    else if (acceptComparable === 0) coverageWarning = `all ${comparable} comparable runs are ROLLBACK-direction — an unconditional-rollback VM would also score ${agreementPct}%. Accept direction is exercised separately on real genesis bytecode in tests/regression.test.ts.`;
+  }
 
   const headline = insufficient
     ? `insufficient corpus: ${comparable} comparable real hook executions (of ${total} total; ${degradedCount} degraded/excluded) — not enough to measure VM fidelity.`
-    : `VM agrees with on-chain on ${agreements}/${comparable} comparable real hook executions (${agreementPct}% ; ${degradedCount} degraded/excluded).`;
+    : `VM agrees with on-chain on ${agreements}/${comparable} comparable real hook executions (${agreementPct}% ; ${degradedCount} degraded/excluded) — composition: ${acceptComparable} accept / ${rollbackComparable} rollback across ${comparableHooks.size} hook(s).${coverageWarning ? ` NOTE: ${coverageWarning}` : ""}`;
 
   return {
     total,
@@ -406,6 +425,8 @@ export function fidelityReport(corpus: HookCorpus): FidelityReport {
     agreements,
     agreementPct,
     degradedCount,
+    composition,
+    coverageWarning,
     mismatches,
     perHook,
     corpus: {
