@@ -57,7 +57,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured }, isError: true as const };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "2.0.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "2.0.1" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
