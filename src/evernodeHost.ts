@@ -38,8 +38,9 @@ const RIPPLE_EPOCH = 946684800;
 
 export interface HostDeps {
   getAccountInfo: (a: string) => Promise<Record<string, any>>;
-  /** ledger_entry hook_state on the governor account; null when the entry doesn't exist. */
-  getHookState: (key: string) => Promise<string | null>;
+  /** ledger_entry hook_state on the governor account. null = entry confirmed absent (entryNotFound);
+   *  undefined = the read FAILED (node down / rate-limited) — caller must not treat that as "absent". */
+  getHookState: (key: string) => Promise<string | null | undefined>;
   getLines: (a: string) => Promise<Record<string, any>[]>;
   getUriTokens: (a: string) => Promise<Record<string, any>[]>;
   /** current validated ledger close time (Ripple time, seconds) — used as "now". */
@@ -184,6 +185,11 @@ export async function evernodeHostDiagnostics(address: string, network: string, 
   // 2. registration entry on the governor namespace
   await sleep(SPACING_MS);
   const regHex = await deps.getHookState(hostAddrKey(accountId));
+  if (regHex === undefined) {
+    // The governor registration read FAILED (not "absent"). Reporting "not a registered host" here
+    // would be a false negative on a node hiccup, so refuse to conclude.
+    throw new Error("could not read the Evernode governor registration state (node unavailable or rate-limited) — cannot determine host status; retry, or set XAHAU_RPC_URLS to a full-history node");
+  }
   if (!regHex) {
     checks.push({ name: "registration", status: "FAIL", detail: "no host registration entry on the Evernode governor namespace — this account is not a registered Evernode host" });
     return {

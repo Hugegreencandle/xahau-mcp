@@ -88,6 +88,9 @@ export function readWasm(bytes: Uint8Array): WasmInfo {
         }
         case 2: { // import
           const count = s.uleb();
+          // Each entry consumes ≥1 byte, so a count larger than the bytes remaining in this section
+          // is a malformed/hostile vector length — refuse rather than allocate `count` objects.
+          if (count > s.buf.length - s.p) throw new Error("import vector count exceeds section size");
           for (let i = 0; i < count; i++) {
             const module = s.name();
             const name = s.name();
@@ -111,6 +114,7 @@ export function readWasm(bytes: Uint8Array): WasmInfo {
         }
         case 7: { // export
           const count = s.uleb();
+          if (count > s.buf.length - s.p) throw new Error("export vector count exceeds section size");
           for (let i = 0; i < count; i++) {
             const name = s.name();
             const k = s.u8();
@@ -144,11 +148,13 @@ function readLimits(s: Reader): { min: number; max: number | null } {
 function scanCode(code: Uint8Array, info: WasmInfo): void {
   const s = new Reader(code);
   const funcCount = s.uleb();
+  if (funcCount > s.buf.length - s.p) throw new Error("code section func count exceeds section size");
   for (let f = 0; f < funcCount; f++) {
     const bodySize = s.uleb();
     const end = s.p + bodySize;
     // locals
     const localGroups = s.uleb();
+    if (localGroups > end - s.p) throw new Error("local group count exceeds function body size");
     for (let i = 0; i < localGroups; i++) { s.uleb(); s.u8(); }
     walkExpr(s, end, info);
     s.p = end; // resync to declared body end regardless

@@ -107,4 +107,21 @@ describe("fidelity over the committed corpus (foreign-state reconstruction)", ()
     expect(r.agreements).toBe(r.comparable);
     expect(r.agreementPct).toBe(100);
   });
+
+  it("reports direction composition and discloses single-direction coverage honestly", async () => {
+    const { fidelityReport } = await import("../src/fidelity.js");
+    const corpus = JSON.parse(readFileSync(CORPUS_PATH, "utf8"));
+    const r = fidelityReport(corpus);
+    // composition sums back to comparable
+    expect(r.composition.accept + r.composition.rollback).toBe(r.comparable);
+    expect(r.composition.distinctHooks).toBeGreaterThan(0);
+    // INVARIANT: the metric must never present a single-direction corpus as broad fidelity without
+    // saying so. While the committed corpus is accept-only, the headline must carry the coverage note.
+    if (r.composition.accept === 0 || r.composition.rollback === 0) {
+      expect(r.coverageWarning).toBeTruthy();
+      expect(r.headline).toMatch(/unconditional-(accept|rollback) VM would also score/);
+    } else {
+      expect(r.coverageWarning).toBeNull();
+    }
+  });
 });

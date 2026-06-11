@@ -116,6 +116,7 @@ truncated). Each case carries the FULL pre-execution context, captured at `ledge
 | agreements (VM decision == on-chain) | **30** |
 | **agreementPct** | **100%** |
 | degraded / excluded | **0** |
+| direction composition | **30 accept / 0 rollback** (single-direction → `coverageWarning` set) |
 
 **Per-hook:**
 
@@ -146,7 +147,15 @@ truncated). Each case carries the FULL pre-execution context, captured at `ledge
   placeholder (cannot change the decision), `state_foreign_set` does not model the HookGrant
   requirement, XFL math truncates rather than round-half-up, and the exact `HookReturnCode` is not
   asserted (it can encode source line numbers and runtime values).
-- The corpus is Evernode-dominated because live Xahau traffic is — the per-hook breakdown is always
-  reported so composition can't hide anything.
+- **Direction coverage (the load-bearing caveat).** All 30 comparable executions are
+  **accept-direction** (`HookResult=3`) — live Xahau traffic is heartbeat-dominated, so the corpus is
+  too. That means *an unconditional-accept VM would also score 100% on this corpus*. The metric does
+  not hide this: `fidelityReport` returns `composition` (`{accept, rollback, distinctHooks}`) and a
+  `coverageWarning`, and the headline carries the note whenever the comparable set is single-direction.
+  The **rollback** direction is exercised on real mainnet genesis bytecode — governance `Invoke` →
+  rollback (and reward `ClaimReward` → accept) — in [`tests/regression.test.ts`](../tests/regression.test.ts),
+  reproducing the on-chain decision direction non-degraded. Folding real on-chain rollbacks
+  (`tecHOOK_REJECTED`, `HookResult=4`) into the scored corpus is the next coverage step.
+- The per-hook breakdown is always reported so composition can't hide anything.
 - The measurement stays **offline and reproducible**: the resolved context is committed inside the
   corpus; `vm_fidelity_report` replays it with no network access.

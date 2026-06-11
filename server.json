@@ -21,7 +21,13 @@
       "environmentVariables": [
         {
           "name": "XAHAU_RPC_URLS",
-          "description": "Optional comma-separated override of Xahau JSON-RPC endpoints (defaults to built-in mainnet/testnet endpoints)",
+          "description": "Optional comma-separated override of MAINNET Xahau JSON-RPC endpoints (defaults to built-in mainnet endpoints)",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "XAHAU_TEST_RPC_URLS",
+          "description": "Optional comma-separated override of TESTNET Xahau JSON-RPC endpoints (defaults to built-in testnet endpoints)",
           "isRequired": false,
           "isSecret": false
         }

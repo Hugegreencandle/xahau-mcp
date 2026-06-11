@@ -52,7 +52,9 @@ function ok(text: string, structured: Record<string, unknown>) {
   return { content: [{ type: "text" as const, text }], structuredContent: structured };
 }
 function fail(text: string, structured: Record<string, unknown> = {}) {
-  return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
+  // isError marks this as a failed tool call so MCP clients (and agents) don't treat the error
+  // payload as data. The SDK also skips outputSchema validation on isError results.
+  return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured }, isError: true as const };
 }
 
 const server = new McpServer({ name: "xahau-mcp", version: "2.0.0" });
@@ -373,7 +375,11 @@ server.registerTool("scam_check", {
 
 /* ===================== Tier C — Hook intelligence (the moat, offline) ===================== */
 
-const WASM_IN = { wasmHex: z.string().optional(), wasmBase64: z.string().optional() };
+// 128 KiB byte ceiling (see MAX_WASM_BYTES in sandbox.ts) → 256 Ki hex chars / ~180 K base64 chars.
+const WASM_IN = {
+  wasmHex: z.string().max(262_144, "wasmHex too large (>128 KiB of bytecode)").optional(),
+  wasmBase64: z.string().max(180_000, "wasmBase64 too large (>128 KiB of bytecode)").optional(),
+};
 
 server.registerTool("inspect_hook_wasm", {
   description: "Parse a Hook's CreateCode WASM (hex or base64): imports (Hook API functions), exports (hook/cbak), memory, custom sections, loop and guard(_g) counts. Offline, never executes the module.",
@@ -726,7 +732,12 @@ server.registerTool("evernode_host_diagnostics", {
           const e = await rpc.getLedgerEntry({ hook_state: { account: gov, key, namespace_id: EVERNODE_HOOK_NAMESPACE } }, network as Net);
           const d = (e.node as Record<string, unknown>)?.HookStateData;
           return typeof d === "string" && d.length ? d : null;
-        } catch { return null; }
+        } catch (err) {
+          // entryNotFound = the state genuinely doesn't exist (null); any other failure = unavailable
+          // (undefined) so the diagnostics layer doesn't misreport a node hiccup as "not registered".
+          if (/entryNotFound/i.test((err as Error).message)) return null;
+          return undefined;
+        }
       },
       getLines: (a) => rpc.getAccountLines(a, network as Net).then((x) => x.lines),
       getUriTokens: (a) => rpc.getAccountObjects(a, network as Net, "uri_token").then((x) => x.account_objects),
@@ -755,18 +766,21 @@ server.registerTool("diagnose_failed_tx", {
 
 /** Shared live wiring for the flight simulator (simulate_transaction / what_if). */
 function simDeps(network: Net, ledgerIndex?: number): SimDeps {
-  const li = ledgerIndex !== undefined ? { ledger_index: ledgerIndex } : {};
+  // Pin EVERY read to the simulation ledger. For what_if this is the pre-execution ledger, so the
+  // installed hook chain, hook definitions, parameters and account balance/sequence are read AS THEY
+  // WERE — not from today's validated ledger (which would replay yesterday's tx against today's hooks).
+  const li = ledgerIndex !== undefined ? { ledger_index: ledgerIndex } : { ledger_index: "validated" as const };
   return {
     getAccountHooks: async (a) => {
-      const r = await rpc.getAccountObjects(a, network, "hook");
+      const r = await rpc.rpc<{ account_objects: Record<string, any>[] }>("account_objects", { account: a, type: "hook", ...li }, network);
       const hookObj = r.account_objects.find((o: any) => o.LedgerEntryType === "Hook") as any;
       return (hookObj?.Hooks ?? []) as Record<string, any>[];
     },
     getHookDefinition: async (hash) => {
-      try { const r = await rpc.getLedgerEntry({ hook_definition: hash }, network); return r.node as Record<string, any>; }
+      try { const r = await rpc.rpc<{ node: Record<string, any> }>("ledger_entry", { hook_definition: hash, ...li }, network); return r.node as Record<string, any>; }
       catch { return null; }
     },
-    getAccountInfo: async (a) => { try { return await rpc.getAccountInfo(a, network); } catch { return null; } },
+    getAccountInfo: async (a) => { try { return await rpc.rpc<{ account_data: Record<string, unknown> }>("account_info", { account: a, ...li }, network); } catch { return null; } },
     getHookState: async (acc, ns, key) => {
       const rAddr = accountIdToR(acc) ?? acc;
       try {
@@ -798,7 +812,7 @@ function simDeps(network: Net, ledgerIndex?: number): SimDeps {
 }
 
 server.registerTool("simulate_transaction", {
-  description: "THE PRE-SIGN FLIGHT SIMULATOR — predict what Xahau will do with an UNSIGNED transaction before you sign it. Every hook the tx would trigger (originator chain first, then strong/weak transactional stakeholders — order canonical from xahaud Transactor.cpp/applyHook.cpp) runs as REAL bytecode against LIVE ledger state in the local VM (measured 100% agreement on 30/30 real mainnet executions). Reports per-hook accept/rollback + return strings, simulated state writes, decoded emitted transactions, labeled STATIC engine preflights (sequence/balance/destination/expiry), and a scam score. Never signs, never submits. Slow but thorough (iterative state resolution, ~1.1s per read).",
+  description: "THE PRE-SIGN FLIGHT SIMULATOR — predict what Xahau will do with an UNSIGNED transaction before you sign it. Every hook the tx would trigger (originator chain first, then strong/weak transactional stakeholders — order canonical from xahaud Transactor.cpp/applyHook.cpp) runs as REAL bytecode against LIVE ledger state in the local VM (measured 100% agreement on 30 real mainnet hook executions — all accept-direction; rollback direction proven separately on real genesis bytecode). Reports per-hook accept/rollback + return strings, simulated state writes, decoded emitted transactions, labeled STATIC engine preflights (sequence/balance/destination/expiry), and a scam score. Never signs, never submits. Slow but thorough (iterative state resolution, ~1.1s per read).",
   inputSchema: { tx: z.record(z.string(), z.unknown()).describe("unsigned transaction JSON (TransactionType, Account, ...)"), network: NET },
   outputSchema: SIMULATE_OUT,
 }, async ({ tx, network }) => {
@@ -889,11 +903,11 @@ server.registerTool("build_import_unsigned", {
 
 server.registerTool("build_payment_unsigned", {
   description: "Assemble an UNSIGNED XAH Payment (amount in drops). Returns unsigned JSON + offline signing instructions + payload preflight. Never signs; testnet by default.",
-  inputSchema: { account: z.string().min(25), destination: z.string().min(25), amountXahDrops: z.string(), destinationTag: z.number().optional(), network: NET.default("testnet") },
-}, async (a) => { try { const r = buildPaymentUnsigned(a as any); return ok(`unsigned Payment ${a.amountXahDrops} drops → ${a.destination} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
+  inputSchema: { account: z.string().min(25), destination: z.string().min(25), amountDrops: z.string().describe("native amount in DROPS (1 XAH = 1,000,000 drops); use xah_amount to convert XAH→drops"), destinationTag: z.number().optional(), network: NET.default("testnet") },
+}, async (a) => { try { const r = buildPaymentUnsigned(a as any); return ok(`unsigned Payment ${a.amountDrops} drops → ${a.destination} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
 
 server.registerTool("prepare_transaction", {
-  description: "Autofill an unsigned transaction with live network values — Sequence (from the account), Fee (current base fee), LastLedgerSequence (now + offset), and NetworkID — so it's ready to sign OFFLINE. Read-only: fetches values, fills the tx, but NEVER signs or submits.",
+  description: "Autofill an unsigned transaction with live network values — Sequence (from the account), Fee (current base fee), LastLedgerSequence (now + offset), and NetworkID — so it's ready to sign OFFLINE. Read-only: fetches values, fills the tx, but NEVER signs or submits. Defaults to TESTNET — pass network:'mainnet' for a mainnet account (else you get a mainnet account's testnet Sequence/NetworkID or actNotFound).",
   inputSchema: { tx: z.record(z.string(), z.unknown()).describe("unsigned tx JSON; must include Account + TransactionType"), lastLedgerOffset: z.number().default(20), network: NET.default("testnet") },
 }, async ({ tx, lastLedgerOffset, network }) => {
   try {
@@ -931,6 +945,8 @@ server.registerTool("vm_fidelity_report", {
       agreements: rep.agreements,
       agreementPct: rep.agreementPct,
       degradedCount: rep.degradedCount,
+      composition: rep.composition,
+      coverageWarning: rep.coverageWarning,
       insufficient: rep.insufficient,
       perHook: rep.perHook,
       corpus: rep.corpus,

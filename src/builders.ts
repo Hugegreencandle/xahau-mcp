@@ -91,12 +91,12 @@ export function buildClaimRewardUnsigned(input: { account: string; issuer?: stri
   return { unsignedTx: tx, network, signingInstructions: SIGNING_INSTRUCTIONS };
 }
 
-export function buildPaymentUnsigned(input: { account: string; destination: string; amountXahDrops: string; destinationTag?: number; network?: Network }): BuildResult {
+export function buildPaymentUnsigned(input: { account: string; destination: string; amountDrops: string; destinationTag?: number; network?: Network }): BuildResult {
   const network = input.network ?? "testnet";
   const findings: Finding[] = [];
   const tx: Record<string, unknown> = {
     TransactionType: "Payment", ...base(input.account, network),
-    Destination: input.destination, Amount: input.amountXahDrops,
+    Destination: input.destination, Amount: input.amountDrops,
   };
   if (input.destinationTag !== undefined) tx.DestinationTag = input.destinationTag;
   findings.push({ ruleId: "TX-001-NO-LASTLEDGERSEQ", severity: "LOW", message: "Add a LastLedgerSequence before signing so the tx cannot be replayed indefinitely." });

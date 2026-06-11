@@ -14,4 +14,5 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
 COPY --from=build /app/dist ./dist
 COPY data ./data
+USER node
 ENTRYPOINT ["node", "dist/index.js"]

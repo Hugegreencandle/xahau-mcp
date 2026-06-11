@@ -43,7 +43,8 @@ export const HOOK_REPORT_OUT = {
 
 export const FIDELITY_OUT = {
   total: num, comparable: num, agreements: num, agreementPct: z.number().nullable().optional(),
-  degradedCount: num, perHook: arr, mismatches: arr, headline: str, insufficient: bool, ...err,
+  degradedCount: num, composition: z.unknown().optional(), coverageWarning: z.string().nullable().optional(),
+  perHook: arr, mismatches: arr, headline: str, insufficient: bool, ...err,
 };
 
 export const QUANTUM_OUT = {

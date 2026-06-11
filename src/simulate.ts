@@ -1,7 +1,8 @@
 // simulate_transaction — the PRE-SIGN FLIGHT SIMULATOR. Take an UNSIGNED transaction and predict
 // what Xahau's hooks will do with it BEFORE you sign: every hook it would trigger runs as REAL
 // bytecode against LIVE (or historical) ledger state in the local VM — the same VM measured at
-// 100% agreement on 30/30 real mainnet hook executions (docs/FIDELITY.md).
+// 100% agreement on 30 real mainnet hook executions (accept-direction; rollback direction proven on
+// real genesis bytecode in tests/regression.test.ts — see docs/FIDELITY.md for the composition).
 //
 // Execution semantics are CANONICAL, verified against xahaud Transactor.cpp + applyHook.cpp
 // (fetched 2026-06-11):
@@ -289,6 +290,6 @@ export async function simulateTransaction(
 
   return {
     verdict, summary, ledgerIndex, historical, hookRuns, staticChecks, scamScore: scam, notes,
-    caveat: "Simulates the HOOK layer with real bytecode against real ledger state (VM measured 100% on 30/30 real mainnet executions — docs/FIDELITY.md) plus labeled STATIC engine preflights. NOT full consensus: paths/offers/owner-reserve interactions and ledger-object-derived stakeholders are out of scope and flagged in notes. Hook state writes/emits shown are simulated, never submitted.",
+    caveat: "Simulates the HOOK layer with real bytecode against real ledger state (VM measured 100% on 30 real mainnet executions — accept-direction; rollback direction proven on real genesis bytecode, see docs/FIDELITY.md) plus labeled STATIC engine preflights. NOT full consensus: paths/offers/owner-reserve interactions and ledger-object-derived stakeholders are out of scope and flagged in notes. Hook state writes/emits shown are simulated, never submitted.",
   };
 }
