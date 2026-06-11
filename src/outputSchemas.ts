@@ -76,6 +76,16 @@ export const DECODE_XPOP_OUT = {
   validators: z.record(z.string(), z.unknown()).nullable().optional(), warnings: arr, summary: str, ...err,
 };
 
+export const HOST_DIAGNOSTICS_OUT = {
+  address: str, network: str, isRegisteredHost: bool, summary: str,
+  checks: arr,
+  registration: z.record(z.string(), z.unknown()).nullable().optional(),
+  heartbeat: z.record(z.string(), z.unknown()).nullable().optional(),
+  specs: z.record(z.string(), z.unknown()).nullable().optional(),
+  balances: obj, leases: obj,
+  warnings: arr, notes: arr, ...err,
+};
+
 export const REWARD_STATUS_OUT = {
   address: str, network: str, optedIn: bool, summary: str,
   balanceXah: z.number().nullable().optional(),

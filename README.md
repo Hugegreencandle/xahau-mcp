@@ -13,6 +13,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 - **Decode the cryptic `HookOn` bitmap** in both directions — the 256-bit, inverted, active-low mask (with the active-high SetHook bit) is easy to get wrong; here it's verified and round-trip-tested.
 - **Read Xahau ledger state** — accounts, installed hooks, hook definitions, hook state, transactions (with `HookExecutions` metadata), ledgers.
 - **Answer the #1 retail question** — `reward_status` tells any account whether it's opted in to Xahau network rewards (Balance Adjustments), the exact XAH accrued — computed with the genesis reward hook's own formula and live parameters, verified to reproduce a real on-chain payout **to the drop** — when it can next claim, and whether the claim is overdue (late claiming forfeits yield).
+- **Diagnose an Evernode host** — `evernode_host_diagnostics` automates the official troubleshooting checklist for Xahau's largest operator group: registration, heartbeat liveness (the actual on-chain active rule), reputation, EVR trustline, lease offers, specs and accumulated rewards, in one read-only call.
 - **Build unsigned transactions** (SetHook, ClaimReward, Payment) with an automatic security preflight — returned **unsigned**, to be signed offline.
 
 ## Safety posture
@@ -59,6 +60,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | `decode_sign_request` | Decode a Xaman txjson or tx_blob → plain-English "what you authorize" + safety warnings. |
 | `scam_check` | Danger-score any sign request 0–100 → SAFE/CAUTION/DANGER + per-rule findings. |
 | `decode_lease_uri` | Decode an Evernode lease URIToken (`evrlease`/LTV) → lease index, EVR amount (XFL), ToS hash, IP. |
+| `evernode_host_diagnostics` | **One-call Evernode host health check** (the official troubleshooting checklist, automated): registration entry, heartbeat liveness vs the on-chain active rule, instance load, reputation, EVR trustline/balance, registration URIToken, lease offers, machine specs + accumulated EVR reward. Layout verified against the canonical `evernode-js-client` + a live mainnet host (~9 serial reads). |
 | `inspect_emitted_tx` | Decode a hook's `emit()` blobs → tx JSON + plain-English summary + danger score. |
 | `scam_check` | Score a sign request (txjson or tx_blob) for risky patterns → `dangerScore` 0-100 + SAFE/CAUTION/DANGER tier + per-rule findings (SetHook, AccountDelete-to-other, regular-key/signer-list changes, large native payment, no-expiry, pre-signed). Offline heuristic on tx **shape only** — every finding is a **potential** risk, never a confirmed scam; no block-list lookup, no on-chain malice check. |
 

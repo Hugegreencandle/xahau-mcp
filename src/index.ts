@@ -32,8 +32,9 @@ import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, b
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
-import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT } from "./outputSchemas.js";
+import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT } from "./outputSchemas.js";
 import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
+import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,7 +52,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "1.5.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "1.6.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -680,6 +681,30 @@ server.registerTool("reward_status", {
         const l = x.ledger as Record<string, any>;
         return { ledgerIndex: Number(l.ledger_index), closeTime: Number(l.close_time) };
       }),
+    });
+    return ok(r.summary, r as unknown as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("evernode_host_diagnostics", {
+  description: "One-call health check for an Evernode host (the official docs' troubleshooting checklist, automated): registration entry on the governor namespace, heartbeat liveness vs the on-chain active rule (current moment − heartbeatFreq×momentSize), instance load, reputation byte, EVR trustline + balance, registration URIToken held, lease offers, machine specs + accumulated EVR reward. Layout verified against canonical evernode-js-client + live mainnet. Read-only; ~9 serial RPC reads (slow but thorough).",
+  inputSchema: { address: z.string().min(25).describe("host r-address"), network: NET },
+  outputSchema: HOST_DIAGNOSTICS_OUT,
+}, async ({ address, network }) => {
+  try {
+    const gov = EVERNODE_GOVERNOR[network as keyof typeof EVERNODE_GOVERNOR];
+    const r = await evernodeHostDiagnostics(address, network as string, {
+      getAccountInfo: (a) => rpc.getAccountInfo(a, network as Net),
+      getHookState: async (key) => {
+        try {
+          const e = await rpc.getLedgerEntry({ hook_state: { account: gov, key, namespace_id: EVERNODE_HOOK_NAMESPACE } }, network as Net);
+          const d = (e.node as Record<string, unknown>)?.HookStateData;
+          return typeof d === "string" && d.length ? d : null;
+        } catch { return null; }
+      },
+      getLines: (a) => rpc.getAccountLines(a, network as Net).then((x) => x.lines),
+      getUriTokens: (a) => rpc.getAccountObjects(a, network as Net, "uri_token").then((x) => x.account_objects),
+      getCloseTime: () => rpc.getLedger("validated", network as Net).then((x) => Number((x.ledger as Record<string, any>).close_time)),
     });
     return ok(r.summary, r as unknown as Record<string, unknown>);
   } catch (e) { return fail((e as Error).message); }
