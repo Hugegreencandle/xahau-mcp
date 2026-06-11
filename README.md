@@ -15,6 +15,7 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 - **Answer the #1 retail question** — `reward_status` tells any account whether it's opted in to Xahau network rewards (Balance Adjustments), the exact XAH accrued — computed with the genesis reward hook's own formula and live parameters, verified to reproduce a real on-chain payout **to the drop** — when it can next claim, and whether the claim is overdue (late claiming forfeits yield).
 - **Diagnose an Evernode host** — `evernode_host_diagnostics` automates the official troubleshooting checklist for Xahau's largest operator group: registration, heartbeat liveness (the actual on-chain active rule), reputation, EVR trustline, lease offers, specs and accumulated rewards, in one read-only call.
 - **Explain a failed transaction** — `diagnose_failed_tx` turns an engine result + hook return strings into a plain-English cause and a concrete fix.
+- **Watch governance live** — `governance_state` decodes the Genesis Governance Game's full hook state: who holds the 20 seats, every open vote and tally, and whether a change (member swap, reward-rate change) is about to be actioned. No explorer shows this.
 - **Build unsigned transactions** (SetHook, ClaimReward, Payment) with an automatic security preflight — returned **unsigned**, to be signed offline.
 
 ## Safety posture
@@ -81,7 +82,8 @@ Point any MCP-capable agent (Claude, etc.) at this server and it can:
 | `reward_status` | **Balance Adjustment doctor** — opted in? exact accrued XAH (the genesis reward hook's own formula from `reward.c`, with live `RR`/`RD` read from genesis hook state; reproduces a real on-chain `GenesisMint` payout **to the drop**), next-claim countdown, overdue-claim warning (late claiming forfeits yield), plus an unsigned opt-in/claim `ClaimReward` when applicable (3 serial reads). |
 | `compute_reward` | Project claimable XAH network reward (`DOCUMENTED_MODEL`; legacy — prefer `reward_status`). |
 | `quantum_grade` | Grade an account for quantum (HNDL) readiness — master-key/regular-key/multisig + hooks → score, tier, recommendations (with a Hook/PQC angle). |
-| `governance_state` · `decode_b2m` | Genesis governance constants + live read · Burn2Mint classification. |
+| `governance_state` | **Full live decode of the Governance Game**: all 20 seats + members, member count, live reward rate/delay, every open vote (who voted what) and every tally with its threshold (80% membership / 100% else) and reached-flag. Layout canonical from `xahaud hook/genesis/govern.c`. |
+| `decode_b2m` | Burn2Mint classification. |
 
 **Unsigned builders (no keys, testnet-default)**
 | Tool | Purpose |

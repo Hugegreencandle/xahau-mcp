@@ -8,13 +8,13 @@
     "url": "https://github.com/Hugegreencandle/xahau-mcp",
     "source": "github"
   },
-  "version": "1.8.0",
+  "version": "1.9.0",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/Hugegreencandle/xahau-mcp/releases/download/v1.8.0/xahau-mcp-1.8.0.mcpb",
+      "identifier": "https://github.com/Hugegreencandle/xahau-mcp/releases/download/v1.9.0/xahau-mcp-1.9.0.mcpb",
       "fileSha256": "d397d609bd3bd8b9adc1ae49f6765c259cd2535481cf139997d77f868e67331a",
-      "version": "1.8.0",
+      "version": "1.9.0",
       "transport": {
         "type": "stdio"
       },

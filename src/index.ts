@@ -36,6 +36,7 @@ import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, H
 import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { diagnoseFailedTx } from "./diagnose.js";
+import { decodeGovernance } from "./governanceDecode.js";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,7 +54,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured } };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "1.8.0" });
+const server = new McpServer({ name: "xahau-mcp", version: "1.9.0" });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -760,9 +761,20 @@ server.registerTool("quantum_grade", {
 });
 
 server.registerTool("governance_state", {
-  description: "Genesis Governance Game constants + a live read of the genesis account. Per-seat/topic decode not yet implemented (honest).",
+  description: "Genesis Governance Game — FULL live decode of the L1 table's hook state (layout canonical from xahaud hook/genesis/govern.c): all 20 seats and their members, member count, live reward rate/delay, every OPEN VOTE (who voted what, per topic) and every tally with its threshold (membership topics 80% of filled seats, everything else 100%) and whether it's reached. Plus the documented constants + a live genesis-account read. 2 RPC reads.",
   inputSchema: { network: NET },
-}, async ({ network }) => { try { const g = await governanceState(network as Net); return ok(`genesis ${GOVERNANCE?.genesisAccount ?? "?"} · ${GOVERNANCE?.governanceSeats ?? "?"} seats`, g); } catch (e) { return fail((e as Error).message); } });
+}, async ({ network }) => {
+  try {
+    const g = await governanceState(network as Net);
+    let decoded = null;
+    try {
+      const ns = await rpc.getAccountNamespace(GOVERNANCE?.genesisAccount ?? GENESIS_ACCOUNT, GENESIS_NAMESPACE, network as Net);
+      decoded = decodeGovernance(ns.namespace_entries as { HookStateKey?: string; HookStateData?: string }[]);
+    } catch (e) { (g as Record<string, unknown>).decodeError = (e as Error).message; }
+    const merged = { ...g, ...(decoded ? { decoded, caveat: "Per-seat/topic/vote decode is live from the genesis hook state; layout verified against xahaud hook/genesis/govern.c. " } : {}) };
+    return ok(decoded ? decoded.summary : `genesis ${GOVERNANCE?.genesisAccount ?? "?"} · ${GOVERNANCE?.governanceSeats ?? "?"} seats (decode unavailable)`, merged as Record<string, unknown>);
+  } catch (e) { return fail((e as Error).message); }
+});
 
 server.registerTool("decode_b2m", {
   description: "Heuristically classify a Burn2Mint-related transaction (XRPL↔Xahau bridge direction). Offline.",
