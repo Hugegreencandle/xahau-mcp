@@ -4,6 +4,8 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server for the **[Xa
 
 > Xahau is the XRPL fork whose flagship feature is **Hooks** — small on-ledger WebAssembly smart contracts. There was no MCP for Xahau and no static analyzer for Hooks; this is both.
 
+![xahau-mcp v2.0 flight simulator demo](demo/xahau-mcp-v2-flight-simulator.gif)
+
 ## Why it's useful
 
 Point any MCP-capable agent (Claude, etc.) at this server and it can:
