@@ -22,8 +22,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { simulateTransaction } from "./simulate.js";
 import { simDeps, type Net } from "./simdeps.js";
-import { runHook, type SandboxContext } from "./sandbox.js";
+import { type SandboxContext } from "./sandbox.js";
+import { runHookIsolated } from "./isolated.js";
 import { hexToBytes } from "./wasm.js";
+import { validateAddress } from "./util.js";
 import { decodeCreateCode, runRules, type HookGrant } from "./analyzer.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import * as rpc from "./rpc.js";
@@ -56,11 +58,17 @@ let inflight = 0;
 
 function rateLimited(ip: string): boolean {
   const now = Date.now();
+  // sweep expired buckets so the map can't grow unbounded (one entry per IP)
+  if (buckets.size > 4096) {
+    for (const [k, v] of buckets) if (now > v.reset) buckets.delete(k);
+  }
   const b = buckets.get(ip);
   if (!b || now > b.reset) { buckets.set(ip, { count: 1, reset: now + RL_WINDOW_MS }); return false; }
   b.count++;
   return b.count > RL_MAX;
 }
+
+const isHex = (s: string) => s.length % 2 === 0 && /^[0-9a-fA-F]*$/.test(s);
 
 function net(v: unknown): Net {
   return v === "testnet" ? "testnet" : "mainnet";
@@ -96,7 +104,11 @@ function readBody(req: http.IncomingMessage): Promise<any> {
 }
 
 const server = http.createServer(async (req, res) => {
-  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+  // Only trust X-Forwarded-For behind a declared proxy (TRUST_PROXY=1); otherwise
+  // it's an attacker-controlled header that defeats the rate limiter via rotation.
+  const ip = (process.env.TRUST_PROXY
+    ? (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim()
+    : undefined) || req.socket.remoteAddress || "unknown";
   const url = (req.url ?? "/").split("?")[0];
 
   if (req.method === "OPTIONS") return send(res, 204, {});
@@ -105,7 +117,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && url === "/fidelity") {
     try { return send(res, 200, fidelity()); }
-    catch (e) { return send(res, 500, { error: (e as Error).message }); }
+    catch (e) { console.error("fidelity error:", (e as Error).message); return send(res, 500, { error: "internal error" }); }
   }
 
   const POST_ROUTES = ["/simulate", "/what-if", "/execute", "/analyze"];
@@ -128,6 +140,7 @@ const server = http.createServer(async (req, res) => {
       const wasmHex = body?.wasmHex;
       if (typeof wasmHex !== "string" || !wasmHex) return send(res, 400, { error: "missing 'wasmHex'" });
       if (wasmHex.length > MAX_WASM_HEX) return send(res, 413, { error: `wasmHex too large (>128 KiB bytecode)` });
+      if (!isHex(wasmHex)) return send(res, 400, { error: "wasmHex must be even-length hexadecimal" });
       const ctx: SandboxContext = {
         txType: body?.txType,
         otxnFields: body?.otxnFields,
@@ -138,7 +151,9 @@ const server = http.createServer(async (req, res) => {
         ledgerSeq: body?.ledgerSeq,
         feeBase: body?.feeBase,
       };
-      return send(res, 200, runHook(hexToBytes(wasmHex), ctx));
+      // isolated: untrusted bytecode runs in a memory-capped worker with a hard
+      // timeout, so an infinite loop / unguarded recursion can't wedge or OOM us.
+      return send(res, 200, await runHookIsolated(hexToBytes(wasmHex), ctx));
     }
 
     // /analyze — the static rule engine over raw bytecode (offline, zero-RPC). Free,
@@ -147,6 +162,7 @@ const server = http.createServer(async (req, res) => {
       const wasmHex = body?.wasmHex;
       if (typeof wasmHex !== "string" || !wasmHex) return send(res, 400, { error: "missing 'wasmHex'" });
       if (wasmHex.length > MAX_WASM_HEX) return send(res, 413, { error: `wasmHex too large (>128 KiB bytecode)` });
+      if (!isHex(wasmHex)) return send(res, 400, { error: "wasmHex must be even-length hexadecimal" });
       const wasm = decodeCreateCode({ wasmHex });
       if (!wasm.valid) return send(res, 422, { error: wasm.reason ?? "invalid wasm", valid: false });
       const sethook = Boolean(body?.hookOn || body?.namespace || body?.grants);
@@ -167,9 +183,16 @@ const server = http.createServer(async (req, res) => {
       let candidateHooks = body?.candidateHooks as Record<string, any> | undefined;
       if (!candidateHooks && typeof body?.candidateCode === "string" && body.candidateCode) {
         if (body.candidateCode.length > MAX_WASM_HEX) return send(res, 413, { error: "candidateCode too large (>128 KiB bytecode)" });
-        candidateHooks = { [String((tx as any).Account)]: { createCodeHex: body.candidateCode, hookOn: body.candidateHookOn, namespace: body.candidateNamespace } };
+        if (!isHex(body.candidateCode)) return send(res, 400, { error: "candidateCode must be even-length hexadecimal" });
+        const acct = String((tx as Record<string, unknown>).Account ?? "");
+        if (!validateAddress(acct).valid) return send(res, 400, { error: "candidateCode requires a valid tx.Account r-address" });
+        candidateHooks = { [acct]: { createCodeHex: body.candidateCode, hookOn: body.candidateHookOn, namespace: body.candidateNamespace } };
       }
-      const opts: Record<string, unknown> = {};
+      const opts: Record<string, unknown> = {
+        // isolate every hook execution in a worker so a malicious candidate (or a
+        // hostile on-ledger hook) can't hang/OOM the shim.
+        runHook: (b: Uint8Array, c: SandboxContext) => runHookIsolated(b, c),
+      };
       if (ledgerIndex !== undefined) opts.ledgerIndex = ledgerIndex;
       if (candidateHooks) opts.candidateHooks = candidateHooks;
       const sim = await simulateTransaction(tx as Record<string, unknown>, simDeps(network, ledgerIndex), opts);
@@ -187,10 +210,20 @@ const server = http.createServer(async (req, res) => {
     if (!Number.isFinite(ledgerIndex)) return send(res, 422, { error: "could not determine the tx's ledger index" });
     const tx: Record<string, unknown> = { ...base, ...overrides };
     for (const k of ["TxnSignature", "SigningPubKey", "hash", "meta", "metaData", "date", "inLedger", "ledger_index", "validated"]) delete tx[k];
-    const sim = await simulateTransaction(tx, simDeps(network, ledgerIndex - 1), { ledgerIndex: ledgerIndex - 1 });
+    const sim = await simulateTransaction(tx, simDeps(network, ledgerIndex - 1), {
+      ledgerIndex: ledgerIndex - 1,
+      runHook: (b: Uint8Array, c: SandboxContext) => runHookIsolated(b, c),
+    });
     return send(res, 200, { ...sim, baseTxHash: txHash, overriddenFields: Object.keys(overrides), replayLedger: ledgerIndex - 1 });
   } catch (e) {
-    return send(res, 500, { error: (e as Error).message });
+    const msg = (e as Error).message;
+    // a hook that hangs / busts the memory cap is the CALLER's bytecode — safe to
+    // surface as a 422. Anything else is internal: return generic, log server-side.
+    if (/exceeded \d+ms|memory cap|infinite loop|unguarded recursion/i.test(msg)) {
+      return send(res, 422, { error: msg });
+    }
+    console.error("shim error:", msg);
+    return send(res, 500, { error: "internal error" });
   } finally {
     inflight--;
   }

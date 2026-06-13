@@ -18,7 +18,7 @@
 // HONESTY: this simulates the HOOK layer plus static engine preflights (sequence/fee/balance/
 // destination). It is NOT full consensus — paths/offers/reserve interactions beyond the static
 // checks are out of scope and labeled. Each hook run carries the VM's own degraded/synthetic flags.
-import { runHook, type SandboxResult } from "./sandbox.js";
+import { runHook, type SandboxResult, type SandboxContext } from "./sandbox.js";
 import { reconstructContext } from "./fidelity.js";
 import { hexToBytes } from "./wasm.js";
 import { decodeHookOn } from "./hookon.js";
@@ -131,9 +131,15 @@ export async function simulateTransaction(
      *  for a stakeholder, its on-ledger hook chain is replaced by this single candidate so a
      *  freshly-compiled wasm runs against the full live-ledger TSH chain BEFORE SetHook. */
     candidateHooks?: Record<string, { createCodeHex: string; hookOn?: string; parameters?: unknown[]; namespace?: string }>;
+    /** Override how hook bytecode is executed. The PUBLIC HTTP shim injects a
+     *  worker-isolated, timeout+memory-capped runner so untrusted wasm can't hang
+     *  or OOM the process. Defaults to the in-process synchronous runHook (used by
+     *  the stdio MCP, the fidelity harness and tests — all trusted/bounded). */
+    runHook?: (bytes: Uint8Array, ctx: SandboxContext) => SandboxResult | Promise<SandboxResult>;
   } = {},
 ): Promise<Simulation> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const runHookFn = opts.runHook ?? runHook;
   const spacing = deps.spacingMs ?? SPACING_MS;
   const notes: string[] = [];
   const staticChecks: PreflightCheck[] = [];
@@ -253,7 +259,7 @@ export async function simulateTransaction(
         ctx.hookHash = hash;
         ctx.ledgerSeq = ledgerIndex;
         if (namespace) ctx.hookNamespace = namespace;
-        r = runHook(hexToBytes(code), ctx);
+        r = await runHookFn(hexToBytes(code), ctx);
         const wantsF = r.wantedForeignState.filter((k) => !(k in foreignState));
         const wantsK = r.wantedKeylets.filter((k) => !(k in keyletBlobs));
         if (!wantsF.length && !wantsK.length) break;
