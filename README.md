@@ -173,6 +173,7 @@ curl localhost:8787/health
 docker build --target http -t xahau-mcp-http .
 docker run -p 8787:8787 -e MAX_INFLIGHT=2 -e XAHC_HOOK_MEM_MB=128 xahau-mcp-http
 ```
+On platforms that build the *last* Dockerfile stage (Railway, etc.), use `Dockerfile.http` (set `RAILWAY_DOCKERFILE_PATH=Dockerfile.http`) — it's the http stage as the final stage.
 
 ### Endpoints
 
