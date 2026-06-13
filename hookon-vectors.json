@@ -1,0 +1,10 @@
+{
+  "_comment": "SHARED HookOn round-trip contract between xahc (encoder) and xahau-mcp (decoder). This exact file is committed to BOTH repos. xahc CI asserts encode_hook_on(names) == hex; xahau-mcp CI asserts decodeHookOn(hex).firesOn == set(names). If either implementation drifts (a tx-type table typo, a flipped active-low/active-high bit), its own test fails locally — no cross-repo import needed. Do NOT change a value without updating both repos. HookOn is the 256-bit inverted active-low fire mask with the active-high SetHook(22) exception; one wrong bit = a hook that fires on the wrong transactions.",
+  "vectors": [
+    { "names": ["Payment"], "hex": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBFFFFE" },
+    { "names": ["Payment", "Invoke"], "hex": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FFFFFFFFFFFFFFFFFFBFFFFE" },
+    { "names": ["SetHook"], "hex": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" },
+    { "names": ["Payment", "Invoke", "SetHook"], "hex": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FFFFFFFFFFFFFFFFFFFFFFFE" },
+    { "names": ["AccountSet", "TrustSet", "Payment"], "hex": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFAFFFF6" }
+  ]
+}
