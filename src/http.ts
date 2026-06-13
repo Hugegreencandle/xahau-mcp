@@ -6,19 +6,47 @@
  * This exposes the SAME simulateTransaction core (via simDeps) over plain HTTP.
  * Dependency-free (node:http), read-only, never signs or submits.
  *
- *   POST /simulate   { tx, network?, ledgerIndex? }      -> Simulation
- *   POST /what-if    { txHash, overrides?, network? }     -> Simulation (+ replay meta)
- *   GET  /health                                          -> { ok, ... }
+ *   POST /simulate   { tx, network?, ledgerIndex?, candidateCode? }  -> Simulation
+ *   POST /what-if    { txHash, overrides?, network? }                 -> Simulation (+ replay meta)
+ *   POST /execute    { wasmHex, txType?, otxnFields?, ... }           -> SandboxResult (offline, no RPC)
+ *   POST /analyze    { wasmHex, hookOn?, ... }                        -> { findings, summary } (offline)
+ *   GET  /fidelity                                                    -> fidelity report (+ hash/lastRun)
+ *   GET  /health                                                      -> { ok, ... }
  *
  * Run:  PORT=8787 node dist/http.js   (or `npm run http`)
  */
 import http from "node:http";
+import { readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { simulateTransaction } from "./simulate.js";
 import { simDeps, type Net } from "./simdeps.js";
+import { runHook, type SandboxContext } from "./sandbox.js";
+import { hexToBytes } from "./wasm.js";
+import { decodeCreateCode, runRules, type HookGrant } from "./analyzer.js";
+import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import * as rpc from "./rpc.js";
 
 const PORT = Number(process.env.PORT ?? 8787);
-const MAX_BODY = 64 * 1024; // 64 KB — a tx JSON is tiny
+const MAX_BODY = 512 * 1024;       // 512 KB — a tx JSON is tiny, but /execute carries wasm hex (≤128 KiB wasm = 256 KiB hex)
+const MAX_WASM_HEX = 262_144;      // 128 KiB of bytecode as hex (mirrors sandbox MAX_WASM_BYTES)
+
+// Fidelity corpus + metadata, loaded once. Echoes coverageWarning verbatim so the
+// "100% on 30 hooks" keystone never reads as a bare green number it isn't.
+const CORPUS_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "data", "hook-corpus.json");
+let fidelityCache: { report: unknown; corpusHash: string; lastRun: string } | null = null;
+function fidelity() {
+  if (fidelityCache) return fidelityCache;
+  const raw = readFileSync(CORPUS_PATH, "utf8");
+  const corpus = JSON.parse(raw) as HookCorpus;
+  fidelityCache = {
+    report: fidelityReport(corpus),
+    corpusHash: "sha256:" + createHash("sha256").update(raw).digest("hex").slice(0, 32),
+    lastRun: statSync(CORPUS_PATH).mtime.toISOString(),
+  };
+  return fidelityCache;
+}
 const RL_WINDOW_MS = 60_000;
 const RL_MAX = Number(process.env.RL_MAX ?? 20); // requests / IP / minute
 const MAX_INFLIGHT = Number(process.env.MAX_INFLIGHT ?? 4); // sim is slow + RPC is rate-limited
@@ -73,11 +101,16 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "OPTIONS") return send(res, 204, {});
   if (req.method === "GET" && url === "/health") {
-    return send(res, 200, { ok: true, service: "xahau-mcp http shim", inflight, endpoints: ["/simulate", "/what-if"] });
+    return send(res, 200, { ok: true, service: "xahau-mcp http shim", inflight, endpoints: ["/simulate", "/what-if", "/execute", "/analyze", "/fidelity"] });
+  }
+  if (req.method === "GET" && url === "/fidelity") {
+    try { return send(res, 200, fidelity()); }
+    catch (e) { return send(res, 500, { error: (e as Error).message }); }
   }
 
-  if (req.method !== "POST" || (url !== "/simulate" && url !== "/what-if")) {
-    return send(res, 404, { error: "not found", try: ["POST /simulate", "POST /what-if", "GET /health"] });
+  const POST_ROUTES = ["/simulate", "/what-if", "/execute", "/analyze"];
+  if (req.method !== "POST" || !POST_ROUTES.includes(url)) {
+    return send(res, 404, { error: "not found", try: [...POST_ROUTES.map((r) => `POST ${r}`), "GET /fidelity", "GET /health"] });
   }
 
   if (rateLimited(ip)) return send(res, 429, { error: `rate limited — max ${RL_MAX} req/min` });
@@ -89,6 +122,41 @@ const server = http.createServer(async (req, res) => {
 
   inflight++;
   try {
+    // /execute — run a hook's bytecode in isolation (offline, no RPC). The differential
+    // partner for `xahc verify`: same accept/rollback the local sim.rs should produce.
+    if (url === "/execute") {
+      const wasmHex = body?.wasmHex;
+      if (typeof wasmHex !== "string" || !wasmHex) return send(res, 400, { error: "missing 'wasmHex'" });
+      if (wasmHex.length > MAX_WASM_HEX) return send(res, 413, { error: `wasmHex too large (>128 KiB bytecode)` });
+      const ctx: SandboxContext = {
+        txType: body?.txType,
+        otxnFields: body?.otxnFields,
+        otxnParams: body?.otxnParams,
+        hookAccountId: body?.hookAccountId,
+        hookParams: body?.hookParams,
+        state: body?.state,
+        ledgerSeq: body?.ledgerSeq,
+        feeBase: body?.feeBase,
+      };
+      return send(res, 200, runHook(hexToBytes(wasmHex), ctx));
+    }
+
+    // /analyze — the static rule engine over raw bytecode (offline, zero-RPC). Free,
+    // instant top-of-funnel before the expensive /simulate.
+    if (url === "/analyze") {
+      const wasmHex = body?.wasmHex;
+      if (typeof wasmHex !== "string" || !wasmHex) return send(res, 400, { error: "missing 'wasmHex'" });
+      if (wasmHex.length > MAX_WASM_HEX) return send(res, 413, { error: `wasmHex too large (>128 KiB bytecode)` });
+      const wasm = decodeCreateCode({ wasmHex });
+      if (!wasm.valid) return send(res, 422, { error: wasm.reason ?? "invalid wasm", valid: false });
+      const sethook = Boolean(body?.hookOn || body?.namespace || body?.grants);
+      const { findings, summary } = runRules(
+        { wasm, hookOn: body?.hookOn, namespace: body?.namespace, parameters: body?.parameters, grants: body?.grants as HookGrant[] | undefined, flags: body?.flags },
+        { sethook },
+      );
+      return send(res, 200, { findings, summary });
+    }
+
     if (url === "/simulate") {
       const tx = body?.tx;
       if (!tx || typeof tx !== "object") return send(res, 400, { error: "missing 'tx' object (unsigned transaction JSON)" });
