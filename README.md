@@ -168,6 +168,10 @@ The MCP server speaks **stdio** — browsers, the Xaman webview, and a public "s
 ```bash
 PORT=8787 npm run http        # or: PORT=8787 node dist/http.js
 curl localhost:8787/health
+
+# or deploy the container (non-root, healthchecked):
+docker build --target http -t xahau-mcp-http .
+docker run -p 8787:8787 -e MAX_INFLIGHT=2 -e XAHC_HOOK_MEM_MB=128 xahau-mcp-http
 ```
 
 ### Endpoints
