@@ -162,7 +162,17 @@ const server = http.createServer(async (req, res) => {
       if (!tx || typeof tx !== "object") return send(res, 400, { error: "missing 'tx' object (unsigned transaction JSON)" });
       const network = net(body?.network);
       const ledgerIndex = Number.isFinite(body?.ledgerIndex) ? Number(body.ledgerIndex) : undefined;
-      const sim = await simulateTransaction(tx as Record<string, unknown>, simDeps(network, ledgerIndex), ledgerIndex !== undefined ? { ledgerIndex } : {});
+      // candidate code = simulate a NOT-YET-DEPLOYED hook against the live ledger + TSH chain.
+      // candidateCode (hex) applies to tx.Account; candidateHooks {r-addr -> {...}} is the full form.
+      let candidateHooks = body?.candidateHooks as Record<string, any> | undefined;
+      if (!candidateHooks && typeof body?.candidateCode === "string" && body.candidateCode) {
+        if (body.candidateCode.length > MAX_WASM_HEX) return send(res, 413, { error: "candidateCode too large (>128 KiB bytecode)" });
+        candidateHooks = { [String((tx as any).Account)]: { createCodeHex: body.candidateCode, hookOn: body.candidateHookOn, namespace: body.candidateNamespace } };
+      }
+      const opts: Record<string, unknown> = {};
+      if (ledgerIndex !== undefined) opts.ledgerIndex = ledgerIndex;
+      if (candidateHooks) opts.candidateHooks = candidateHooks;
+      const sim = await simulateTransaction(tx as Record<string, unknown>, simDeps(network, ledgerIndex), opts);
       return send(res, 200, sim);
     }
 

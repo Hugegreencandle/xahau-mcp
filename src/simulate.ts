@@ -124,7 +124,14 @@ function hookOnFires(hookObj: Record<string, any>, def: Record<string, any> | nu
 export async function simulateTransaction(
   tx: Record<string, unknown>,
   deps: SimDeps,
-  opts: { ledgerIndex?: number; closeTime?: number } = {},
+  opts: {
+    ledgerIndex?: number;
+    closeTime?: number;
+    /** Simulate NOT-YET-DEPLOYED code: account r-address -> candidate hook. When present
+     *  for a stakeholder, its on-ledger hook chain is replaced by this single candidate so a
+     *  freshly-compiled wasm runs against the full live-ledger TSH chain BEFORE SetHook. */
+    candidateHooks?: Record<string, { createCodeHex: string; hookOn?: string; parameters?: unknown[]; namespace?: string }>;
+  } = {},
 ): Promise<Simulation> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const spacing = deps.spacingMs ?? SPACING_MS;
@@ -197,16 +204,32 @@ export async function simulateTransaction(
   // ---------- run each stakeholder's hook chain ----------
   let strongRejection: HookSimResult | null = null;
   for (const sh of stakeholders) {
-    await sleep(spacing);
-    const hooksArr = await deps.getAccountHooks(sh.account);
-    const hooks = hooksArr.map((w) => (w as any).Hook ?? w).filter((h) => h && typeof h === "object");
+    const candidate = opts.candidateHooks?.[sh.account];
+    let hooks: Record<string, any>[];
+    if (candidate) {
+      // not-yet-deployed code: a synthetic single-hook chain from the candidate
+      hooks = [{ HookHash: "CANDIDATE", HookNamespace: candidate.namespace, HookParameters: candidate.parameters }];
+      notes.push(`candidate code simulated for ${sh.account} (${candidate.createCodeHex.length / 2} bytes, NOT yet on ledger)`);
+    } else {
+      await sleep(spacing);
+      const hooksArr = await deps.getAccountHooks(sh.account);
+      hooks = hooksArr.map((w) => (w as any).Hook ?? w).filter((h) => h && typeof h === "object");
+    }
     for (let pos = 0; pos < hooks.length; pos++) {
       const h = hooks[pos] as Record<string, any>;
       const hash = typeof h.HookHash === "string" ? h.HookHash : null;
       if (!hash) continue;
-      await sleep(spacing);
-      const def = await deps.getHookDefinition(hash);
-      if (!hookOnFires(h, def, txType, sh.outgoing)) {
+      let def: Record<string, any> | null;
+      if (candidate) {
+        def = { createCodeHex: candidate.createCodeHex, HookOn: candidate.hookOn, HookParameters: candidate.parameters };
+      } else {
+        await sleep(spacing);
+        def = await deps.getHookDefinition(hash);
+      }
+      // a candidate with no declared HookOn is assumed to fire (you're testing the code);
+      // a deployed hook (or a candidate WITH a HookOn) is gated by the real fire mask.
+      const fires = candidate && !candidate.hookOn ? true : hookOnFires(h, def, txType, sh.outgoing);
+      if (!fires) {
         hookRuns.push({ role: sh.role, account: sh.account, position: pos, hookHash: hash, strong: sh.strong, fired: false, skippedReason: `HookOn does not include ${txType}` });
         continue;
       }
