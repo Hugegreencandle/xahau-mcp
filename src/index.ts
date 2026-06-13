@@ -37,7 +37,8 @@ import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { diagnoseFailedTx } from "./diagnose.js";
 import { decodeGovernance } from "./governanceDecode.js";
-import { simulateTransaction, type SimDeps } from "./simulate.js";
+import { simulateTransaction } from "./simulate.js";
+import { simDeps } from "./simdeps.js";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -763,53 +764,6 @@ server.registerTool("diagnose_failed_tx", {
   } catch (e) { return fail((e as Error).message); }
 });
 
-
-/** Shared live wiring for the flight simulator (simulate_transaction / what_if). */
-function simDeps(network: Net, ledgerIndex?: number): SimDeps {
-  // Pin EVERY read to the simulation ledger. For what_if this is the pre-execution ledger, so the
-  // installed hook chain, hook definitions, parameters and account balance/sequence are read AS THEY
-  // WERE — not from today's validated ledger (which would replay yesterday's tx against today's hooks).
-  const li = ledgerIndex !== undefined ? { ledger_index: ledgerIndex } : { ledger_index: "validated" as const };
-  return {
-    getAccountHooks: async (a) => {
-      const r = await rpc.rpc<{ account_objects: Record<string, any>[] }>("account_objects", { account: a, type: "hook", ...li }, network);
-      const hookObj = r.account_objects.find((o: any) => o.LedgerEntryType === "Hook") as any;
-      return (hookObj?.Hooks ?? []) as Record<string, any>[];
-    },
-    getHookDefinition: async (hash) => {
-      try { const r = await rpc.rpc<{ node: Record<string, any> }>("ledger_entry", { hook_definition: hash, ...li }, network); return r.node as Record<string, any>; }
-      catch { return null; }
-    },
-    getAccountInfo: async (a) => { try { return await rpc.rpc<{ account_data: Record<string, unknown> }>("account_info", { account: a, ...li }, network); } catch { return null; } },
-    getHookState: async (acc, ns, key) => {
-      const rAddr = accountIdToR(acc) ?? acc;
-      try {
-        const r = await rpc.rpc<{ node?: Record<string, unknown> }>("ledger_entry", { hook_state: { account: rAddr, key, namespace_id: ns }, ...(ledgerIndex !== undefined ? { ledger_index: ledgerIndex } : { ledger_index: "validated" }) }, network);
-        const d = r.node?.HookStateData;
-        return typeof d === "string" ? d.toUpperCase() : undefined;
-      } catch (e) {
-        if (/entryNotFound/i.test((e as Error).message)) return null; // confirmed absent
-        return undefined;
-      }
-    },
-    getLedgerObject: async (idx) => {
-      try {
-        const r = await rpc.rpc<{ node_binary?: string; node?: { node_binary?: string } }>("ledger_entry", { index: idx, binary: true, ...(ledgerIndex !== undefined ? { ledger_index: ledgerIndex } : { ledger_index: "validated" }) }, network);
-        const b = r.node_binary ?? r.node?.node_binary;
-        return typeof b === "string" ? b.toUpperCase() : undefined;
-      } catch (e) {
-        if (/entryNotFound/i.test((e as Error).message)) return null; // confirmed absent — faithful DOESNT_EXIST
-        return undefined; // unavailable (rate limit etc.) — stays degraded
-      }
-    },
-    getLedgerInfo: async () => {
-      const r = await rpc.getLedger(ledgerIndex ?? "validated", network);
-      const l = r.ledger as Record<string, any>;
-      return { ledgerIndex: Number(l.ledger_index), closeTime: Number(l.close_time) };
-    },
-    getFee: async () => { try { const f = await rpc.getFee(network) as Record<string, any>; return Number(f?.drops?.base_fee ?? 100000); } catch { return 100000; } },
-  };
-}
 
 server.registerTool("simulate_transaction", {
   description: "THE PRE-SIGN FLIGHT SIMULATOR — predict what Xahau will do with an UNSIGNED transaction before you sign it. Every hook the tx would trigger (originator chain first, then strong/weak transactional stakeholders — order canonical from xahaud Transactor.cpp/applyHook.cpp) runs as REAL bytecode against LIVE ledger state in the local VM (measured 100% agreement on 30 real mainnet hook executions — all accept-direction; rollback direction proven separately on real genesis bytecode). Reports per-hook accept/rollback + return strings, simulated state writes, decoded emitted transactions, labeled STATIC engine preflights (sequence/balance/destination/expiry), and a scam score. Never signs, never submits. Slow but thorough (iterative state resolution, ~1.1s per read).",

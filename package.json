@@ -18,6 +18,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
+    "http": "node dist/http.js",
     "smoke": "node dist/index.js --smoke",
     "fetch:defs": "node scripts/fetch-definitions.mjs",
     "fetch:hookapi": "node scripts/fetch-hook-api.mjs",

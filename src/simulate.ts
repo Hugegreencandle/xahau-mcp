@@ -62,6 +62,8 @@ export interface SimDeps {
   getLedgerInfo: () => Promise<{ ledgerIndex: number; closeTime: number }>;
   getFee: () => Promise<number>; // base fee drops
   sleep?: (ms: number) => Promise<void>;
+  /** inter-read spacing in ms; simdeps sets this from XAHC_SIM_SPACING_MS (own-node -> 0, public ~300). Defaults to SPACING_MS. */
+  spacingMs?: number;
 }
 
 export interface HookSimResult {
@@ -125,6 +127,7 @@ export async function simulateTransaction(
   opts: { ledgerIndex?: number; closeTime?: number } = {},
 ): Promise<Simulation> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const spacing = deps.spacingMs ?? SPACING_MS;
   const notes: string[] = [];
   const staticChecks: PreflightCheck[] = [];
   const hookRuns: HookSimResult[] = [];
@@ -138,7 +141,7 @@ export async function simulateTransaction(
   const historical = opts.ledgerIndex !== undefined && opts.ledgerIndex !== live.ledgerIndex;
 
   // ---------- static engine preflights (labeled STATIC — not consensus) ----------
-  await sleep(SPACING_MS);
+  await sleep(spacing);
   const senderInfo = await deps.getAccountInfo(sender);
   const sa = (senderInfo?.account_data ?? senderInfo) as Record<string, any> | null;
   if (!sa) staticChecks.push({ name: "sender exists", status: "FAIL", detail: `${sender} not found on this network` });
@@ -166,7 +169,7 @@ export async function simulateTransaction(
     staticChecks.push({ name: "LastLedgerSequence", status: "FAIL", detail: `already expired (tx ${tx.LastLedgerSequence} <= validated ${ledgerIndex}) — tefMAX_LEDGER` });
   }
   if (txType === "Payment" && typeof tx.Destination === "string") {
-    await sleep(SPACING_MS);
+    await sleep(spacing);
     const di = await deps.getAccountInfo(tx.Destination as string);
     const da = (di?.account_data ?? di) as Record<string, any> | null;
     if (!da) staticChecks.push({ name: "destination exists", status: typeof tx.Amount === "string" && BigInt(tx.Amount as string) >= 1_000_000n ? "WARN" : "FAIL", detail: `${tx.Destination} does not exist — payment must carry >= 1 XAH to create it (else tecNO_DST)` });
@@ -194,14 +197,14 @@ export async function simulateTransaction(
   // ---------- run each stakeholder's hook chain ----------
   let strongRejection: HookSimResult | null = null;
   for (const sh of stakeholders) {
-    await sleep(SPACING_MS);
+    await sleep(spacing);
     const hooksArr = await deps.getAccountHooks(sh.account);
     const hooks = hooksArr.map((w) => (w as any).Hook ?? w).filter((h) => h && typeof h === "object");
     for (let pos = 0; pos < hooks.length; pos++) {
       const h = hooks[pos] as Record<string, any>;
       const hash = typeof h.HookHash === "string" ? h.HookHash : null;
       if (!hash) continue;
-      await sleep(SPACING_MS);
+      await sleep(spacing);
       const def = await deps.getHookDefinition(hash);
       if (!hookOnFires(h, def, txType, sh.outgoing)) {
         hookRuns.push({ role: sh.role, account: sh.account, position: pos, hookHash: hash, strong: sh.strong, fired: false, skippedReason: `HookOn does not include ${txType}` });
@@ -234,13 +237,13 @@ export async function simulateTransaction(
         let progressed = false;
         for (const composite of wantsF) {
           const [acc, ns, key] = composite.split("|");
-          await sleep(SPACING_MS);
+          await sleep(spacing);
           const fv = await deps.getHookState(acc, ns, key);
           if (fv === undefined) continue; // unavailable — stays degraded
           foreignState[composite] = fv; resolved++; progressed = true;
         }
         for (const idx of wantsK) {
-          await sleep(SPACING_MS);
+          await sleep(spacing);
           const blob = await deps.getLedgerObject(idx);
           if (blob === undefined) continue; // unavailable — stays degraded
           keyletBlobs[idx] = blob; resolved++; progressed = true; // string or confirmed-absent null
