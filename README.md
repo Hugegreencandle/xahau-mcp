@@ -146,7 +146,7 @@ Or clone and build:
 git clone https://github.com/Hugegreencandle/xahau-mcp && cd xahau-mcp
 npm install        # the `prepare` script compiles dist/ automatically
 npm run smoke      # health check + a live mainnet read
-npm test           # 261 tests (offline)
+npm test           # 278 tests (offline)
 ```
 
 Also published to **GitHub Packages** as `@hugegreencandle/xahau-mcp`. GitHub Packages requires auth even for public installs, so add to your `.npmrc`:
@@ -160,6 +160,49 @@ Add to an MCP client (e.g. Claude Code / Desktop):
 ```json
 { "mcpServers": { "xahau": { "command": "xahau-mcp" } } }
 ```
+
+## HTTP shim (browsers, wallets, web tools)
+
+The MCP server speaks **stdio** — browsers, the Xaman webview, and a public "simulate any hook" web tool can't. The HTTP shim (`src/http.ts`) exposes the same flight-simulator core over plain HTTP. Read-only; never signs or submits.
+
+```bash
+PORT=8787 npm run http        # or: PORT=8787 node dist/http.js
+curl localhost:8787/health
+```
+
+### Endpoints
+
+| Method · path | Body | Returns |
+|---|---|---|
+| `POST /simulate` | `{ tx, network?, ledgerIndex?, candidateCode? }` | full `Simulation` — per-hook accept/rollback, decoded emits, state writes, static preflights |
+| `POST /what-if` | `{ txHash, overrides?, network? }` | `Simulation` of a real historical tx re-run (with your overrides) at its original ledger |
+| `POST /execute` | `{ wasmHex, txType?, otxnFields?, hookAccountId?, state?, … }` | `SandboxResult` — run a hook's bytecode in isolation (offline, no RPC) |
+| `POST /analyze` | `{ wasmHex, hookOn?, namespace?, … }` | `{ findings, summary }` — the static rule engine (offline, instant, the cheap top-of-funnel) |
+| `GET /fidelity` | — | the VM fidelity report + `corpusHash` + `lastRun` (echoes the accept-only `coverageWarning` verbatim) |
+| `GET /health` | — | `{ ok, inflight, endpoints }` |
+
+**Simulate a not-yet-deployed hook** — pass `candidateCode` (the built wasm hex) on `/simulate`. It replaces `tx.Account`'s on-ledger hook chain, so a freshly-compiled hook runs against the **live ledger + full TSH chain BEFORE you SetHook it**. (This is what [`xahc verify`](https://github.com/Hugegreencandle/xahc) and a public simulate tool call.)
+
+### Config (env)
+
+| Var | Default | Purpose |
+|---|---|---|
+| `PORT` | `8787` | listen port |
+| `RL_MAX` | `20` | requests / IP / minute |
+| `MAX_INFLIGHT` | `4` | concurrent simulations |
+| `XAHC_HOOK_TIMEOUT_MS` | `3000` | hard wall-clock per hook execution |
+| `XAHC_HOOK_MEM_MB` | `256` | memory cap per hook execution |
+| `XAHC_SIM_SPACING_MS` | sim default | inter-read RPC spacing — `0` for your own node, ~`300` behind a shared public node |
+| `TRUST_PROXY` | unset | set **only** when behind a reverse proxy that sets `X-Forwarded-For` |
+| `XAHAU_RPC_URLS` | `data/endpoints.json` | comma-separated mainnet RPC failover list |
+
+### Running it publicly
+
+The shim serves **untrusted, user-supplied wasm**, so each hook execution runs in a throwaway `worker_thread` with the timeout + memory cap above — a hanging or allocation-bombing hook is terminated without blocking or crashing the main process (security-audited; an infinite loop / unguarded recursion returns `422`, not downtime). For a public deploy:
+
+- **Run behind a process supervisor** (systemd / pm2 / container restart policy) for defense-in-depth.
+- **Only set `TRUST_PROXY`** when genuinely behind a proxy that sets `X-Forwarded-For`; otherwise the rate limiter keys on the socket address (setting it lets clients spoof the header and bypass the limit).
+- Per-IP rate limit + a global concurrency cap are on by default — tune via env.
 
 ## Security
 
