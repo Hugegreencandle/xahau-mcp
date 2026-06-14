@@ -25,6 +25,7 @@ import { decodeHookOn } from "./hookon.js";
 import { inspectEmitted } from "./emitted.js";
 import { scorePayload } from "./scam.js";
 import { validateAddress } from "./util.js";
+import { predictTransactor, TRANSACTOR_SUPPORTED, type TransactorPrediction } from "./transactorLite.js";
 
 /** applyHook.cpp getTransactionalStakeHolders — the statically-derivable rows.
  *  field: top-level tx field holding an account; strong: can rollback. */
@@ -61,6 +62,10 @@ export interface SimDeps {
   getLedgerObject: (index: string) => Promise<string | null | undefined>;
   getLedgerInfo: () => Promise<{ ledgerIndex: number; closeTime: number }>;
   getFee: () => Promise<number>; // base fee drops
+  /** account_lines entries (for the approximate transactor: IOU Payment / TrustSet) */
+  getAccountLines?: (account: string) => Promise<Record<string, any>[]>;
+  /** network reserve params in drops (for the approximate transactor) */
+  getReserves?: () => Promise<{ baseDrops: bigint; incDrops: bigint }>;
   sleep?: (ms: number) => Promise<void>;
   /** inter-read spacing in ms; simdeps sets this from XAHC_SIM_SPACING_MS (own-node -> 0, public ~300). Defaults to SPACING_MS. */
   spacingMs?: number;
@@ -95,6 +100,9 @@ export interface Simulation {
   historical: boolean;
   hookRuns: HookSimResult[];
   staticChecks: PreflightCheck[];
+  /** APPROXIMATE normal-transaction effects (the missing `simulate` RPC stand-in). null if not
+   *  computed (deps unavailable). fidelity UNSUPPORTED for tx types not modeled. */
+  transactor: TransactorPrediction | null;
   scamScore: { dangerScore: number; tier: string } | null;
   notes: string[];
   caveat: string;
@@ -181,14 +189,41 @@ export async function simulateTransaction(
   if (tx.LastLedgerSequence !== undefined && !historical && Number(tx.LastLedgerSequence) <= ledgerIndex) {
     staticChecks.push({ name: "LastLedgerSequence", status: "FAIL", detail: `already expired (tx ${tx.LastLedgerSequence} <= validated ${ledgerIndex}) — tefMAX_LEDGER` });
   }
+  let destAcct: Record<string, any> | null = null;
   if (txType === "Payment" && typeof tx.Destination === "string") {
     await sleep(spacing);
     const di = await deps.getAccountInfo(tx.Destination as string);
     const da = (di?.account_data ?? di) as Record<string, any> | null;
+    destAcct = da;
     if (!da) staticChecks.push({ name: "destination exists", status: typeof tx.Amount === "string" && BigInt(tx.Amount as string) >= 1_000_000n ? "WARN" : "FAIL", detail: `${tx.Destination} does not exist — payment must carry >= 1 XAH to create it (else tecNO_DST)` });
     else {
       const requireTag = ((da.Flags ?? 0) & 0x00020000) !== 0; // lsfRequireDestTag
       if (requireTag && tx.DestinationTag === undefined) staticChecks.push({ name: "destination tag", status: "FAIL", detail: "destination requires a DestinationTag (tecDST_TAG_NEEDED)" });
+    }
+  }
+
+  // ---------- approximate transactor (stand-in for the missing `simulate` RPC) ----------
+  let transactor: TransactorPrediction | null = null;
+  if (sa && deps.getReserves) {
+    try {
+      const reserves = await deps.getReserves();
+      let senderLines: Record<string, any>[] = [];
+      const iouPayment = txType === "Payment" && tx.Amount !== null && typeof tx.Amount === "object";
+      if ((iouPayment || txType === "TrustSet") && deps.getAccountLines) {
+        await sleep(spacing);
+        senderLines = await deps.getAccountLines(sender);
+      }
+      transactor = predictTransactor({
+        tx, sender: sa, dest: destAcct, senderLines,
+        reserveBaseDrops: reserves.baseDrops, reserveIncDrops: reserves.incDrops,
+      });
+      if (transactor.fidelity === "UNSUPPORTED") {
+        notes.push(`transactor: normal-tx effects for ${txType || "this tx"} are not modeled (APPROXIMATE model covers: ${[...TRANSACTOR_SUPPORTED].join(", ")}); the hook layer above is faithful`);
+      } else if (transactor.predictedResult && transactor.predictedResult !== "tesSUCCESS") {
+        notes.push(`transactor (APPROXIMATE): would likely ${transactor.predictedResult} — ${transactor.reason}`);
+      }
+    } catch (e) {
+      notes.push(`transactor: skipped (${(e as Error).message})`);
     }
   }
 
@@ -321,7 +356,7 @@ export async function simulateTransaction(
     (historical ? ` (simulated at historical ledger ${ledgerIndex})` : ` (ledger ${ledgerIndex})`);
 
   return {
-    verdict, summary, ledgerIndex, historical, hookRuns, staticChecks, scamScore: scam, notes,
+    verdict, summary, ledgerIndex, historical, hookRuns, staticChecks, transactor, scamScore: scam, notes,
     caveat: "Simulates the HOOK layer with real bytecode against real ledger state (VM measured 100% on 30 real mainnet executions — accept-direction; rollback direction proven on real genesis bytecode, see docs/FIDELITY.md) plus labeled STATIC engine preflights. NOT full consensus: paths/offers/owner-reserve interactions and ledger-object-derived stakeholders are out of scope and flagged in notes. Hook state writes/emits shown are simulated, never submitted.",
   };
 }

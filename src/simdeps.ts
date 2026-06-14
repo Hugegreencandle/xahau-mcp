@@ -74,9 +74,14 @@ export function simDeps(network: Net, ledgerIndex?: number): SimDeps {
     spacingMs: Number.isFinite(spacingMs as number) ? (spacingMs as number) : undefined,
 
     getAccountHooks: async (a) => cached(`${network}:${lk}:hooks:${a}`, ttl, async () => {
-      const r = await rpc.rpc<{ account_objects: Record<string, any>[] }>("account_objects", { account: a, type: "hook", ...li }, network);
-      const hookObj = r.account_objects.find((o: any) => o.LedgerEntryType === "Hook") as any;
-      return (hookObj?.Hooks ?? []) as Record<string, any>[];
+      try {
+        const r = await rpc.rpc<{ account_objects: Record<string, any>[] }>("account_objects", { account: a, type: "hook", ...li }, network);
+        const hookObj = r.account_objects.find((o: any) => o.LedgerEntryType === "Hook") as any;
+        return (hookObj?.Hooks ?? []) as Record<string, any>[];
+      } catch {
+        // account doesn't exist (e.g. paying a not-yet-created destination) → no hooks
+        return [] as Record<string, any>[];
+      }
     }),
 
     // Hook definitions are content-addressed by hash -> immutable forever; key on
@@ -121,6 +126,20 @@ export function simDeps(network: Net, ledgerIndex?: number): SimDeps {
 
     getFee: async () => cached(`${network}:fee`, VALIDATED_TTL_MS, async () => {
       try { const f = await rpc.getFee(network) as Record<string, any>; return Number(f?.drops?.base_fee ?? 100000); } catch { return 100000; }
+    }),
+
+    getAccountLines: async (a) => cached(`${network}:${lk}:lines:${a}`, ttl, async () => {
+      try { const r = await rpc.getAccountLines(a, network) as Record<string, any>; return (r?.lines ?? []) as Record<string, any>[]; } catch { return []; }
+    }),
+
+    getReserves: async () => cached(`${network}:reserves`, VALIDATED_TTL_MS, async () => {
+      try {
+        const si = await rpc.getServerInfo(network) as Record<string, any>;
+        const vl = (si?.info as any)?.validated_ledger ?? {};
+        const base = BigInt(Math.round(Number(vl.reserve_base_xrp ?? 1) * 1_000_000));
+        const inc = BigInt(Math.round(Number(vl.reserve_inc_xrp ?? 0.2) * 1_000_000));
+        return { baseDrops: base, incDrops: inc };
+      } catch { return { baseDrops: 1_000_000n, incDrops: 200_000n }; }
     }),
   };
 }

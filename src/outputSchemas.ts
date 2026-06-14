@@ -113,6 +113,7 @@ export const DIAGNOSE_TX_OUT = {
 export const SIMULATE_OUT = {
   verdict: str, summary: str, ledgerIndex: num, historical: bool,
   hookRuns: arr, staticChecks: arr,
+  transactor: z.record(z.string(), z.unknown()).nullable().optional(),
   scamScore: z.record(z.string(), z.unknown()).nullable().optional(),
   notes: arr, caveat: str,
   baseTxHash: str, overriddenFields: arr, ...err,
