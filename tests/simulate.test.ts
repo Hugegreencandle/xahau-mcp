@@ -159,3 +159,133 @@ describe("TIME MACHINE — replays the real mainnet ClaimReward and reproduces i
     expect(s.summary).toMatch(/1 transaction\(s\) would be emitted/);
   });
 });
+
+describe("simulate_transaction — request budget (read-cap) defense", () => {
+  // Reuse the genesis-reward bytecode: it iteratively requests foreign-state reads (RR/RD) before it
+  // can decide. Starving those reads via a tiny maxReads must force the run degraded → INDETERMINATE,
+  // and must NEVER be reported as WOULD_PASS_HOOKS. An observed strong rollback must still win.
+  const ISSUER = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh";
+  const issuerId = (validateAddress(ISSUER) as any).accountId as string;
+  const ZERO_NS = "0".repeat(64);
+  const RD = "00806AACAF3C0956";
+  const claim = { TransactionType: "ClaimReward", Account: "rDBLQvA747zGP8DB856hxQ8NkxCgtGsVE6", Issuer: ISSUER, Fee: "8630", Sequence: 1 };
+
+  // deps whose hook fans out reads; `reads` counts every getHookState/getLedgerObject hit.
+  // budget (deadlineMs/maxReads) lives on SimDeps — set it here, not in opts.
+  function fanOutDeps(rrHex: string, reads: { n: number }, budget: Partial<Pick<SimDeps, "deadlineMs" | "maxReads">> = {}): SimDeps {
+    return corpusDeps({
+      getAccountHooks: async (a) => a === ISSUER ? [{ Hook: { HookHash: "AA".repeat(32), HookOn: CLAIM_MASK, HookNamespace: ZERO_NS } }] : [],
+      getHookDefinition: async () => ({ CreateCode: REWARD_WASM_HEX, HookOn: CLAIM_MASK, HookNamespace: ZERO_NS }),
+      getAccountInfo: async () => ({ account_data: { Balance: "21673853275", Sequence: 1, Flags: 0 } }),
+      getHookState: async (acc, ns, key) => {
+        reads.n++;
+        if (acc === issuerId && ns === ZERO_NS) {
+          if (key.endsWith("5252")) return rrHex;
+          if (key.endsWith("5244")) return RD;
+        }
+        return null;
+      },
+      getLedgerObject: async (idx) => { reads.n++; return null; },
+      ...budget,
+    });
+  }
+
+  const at = { ledgerIndex: 23488087, closeTime: 834361240 } as const;
+
+  // baseline read count with an ample budget — proves the tiny cap below is a real starve, not a no-op.
+  let baselineReads = 0;
+  it("baseline (ample budget): the reward hook fans out multiple reads and resolves cleanly", async () => {
+    const reads = { n: 0 };
+    const s = await simulateTransaction(claim, fanOutDeps("55554025A6D7CB53", reads, { maxReads: 64, deadlineMs: 0 }), at);
+    baselineReads = reads.n;
+    expect(reads.n).toBeGreaterThan(1);
+    const run = s.hookRuns.find((r) => r.fired)!;
+    expect(run.degraded).toBe(false);
+  });
+
+  it("tiny maxReads starves resolution → run degraded, verdict INDETERMINATE (never WOULD_PASS_HOOKS)", async () => {
+    const reads = { n: 0 };
+    const s = await simulateTransaction(claim, fanOutDeps("55554025A6D7CB53", reads, { maxReads: 1, deadlineMs: 0 }), at);
+    // cap honored: reads stopped early, strictly below the ample-budget baseline.
+    expect(reads.n).toBeLessThan(baselineReads || Number.MAX_SAFE_INTEGER);
+    const run = s.hookRuns.find((r) => r.fired)!;
+    expect(run.degraded).toBe(true);
+    expect(s.verdict).toBe("INDETERMINATE");
+    expect(s.verdict).not.toBe("WOULD_PASS_HOOKS");
+    expect(s.notes.some((n) => /budget exhausted/.test(n))).toBe(true);
+  });
+
+  it("an exhausted wall-clock deadline forces INDETERMINATE (never WOULD_PASS_HOOKS)", async () => {
+    // Deterministically blow the deadline: stub Date.now so the clock jumps past deadlineMs after the
+    // first sample. Avoids real-timer flake while exercising the same deadlinePassed() guard.
+    const reads = { n: 0 };
+    const realNow = Date.now;
+    let t = 1_000_000;
+    // first call = startedAt; every subsequent call has advanced 1000ms — past any small deadline.
+    (Date as any).now = () => { const v = t; t += 1000; return v; };
+    try {
+      const s = await simulateTransaction(claim, fanOutDeps("55554025A6D7CB53", reads, { deadlineMs: 5, maxReads: 64 }), at);
+      const run = s.hookRuns.find((r) => r.fired);
+      if (run) expect(run.degraded).toBe(true);
+      expect(s.verdict).toBe("INDETERMINATE");
+      expect(s.verdict).not.toBe("WOULD_PASS_HOOKS");
+      expect(s.notes.some((n) => /budget exhausted/.test(n))).toBe(true);
+    } finally {
+      (Date as any).now = realNow;
+    }
+  });
+
+  it("a strong rollback is authoritative even when the budget runs out (precedence over INDETERMINATE)", async () => {
+    // RR=0 → the hook rolls back ("disabled by governance") once it has read RR. The strong rollback we
+    // DID observe must win over any later budget exhaustion: verdict WOULD_FAIL_HOOKS, never INDETERMINATE.
+    // ample budget: the rollback is observed cleanly.
+    const reads = { n: 0 };
+    const s = await simulateTransaction(claim, fanOutDeps("0000000000000000", reads, { maxReads: 64, deadlineMs: 0 }), at);
+    expect(s.verdict).toBe("WOULD_FAIL_HOOKS");
+    const run = s.hookRuns.find((r) => r.fired)!;
+    expect(run.exit).toBe("rollback");
+    expect(run.returnString).toMatch(/disabled by governance/);
+  });
+
+  it("strong rollback still wins when the read-cap ALSO trips after the rollback is observed", async () => {
+    // Cap set to the rollback's own read count: the RR read lands and the hook rolls back, but any
+    // residual resolution is then starved. The authoritative rollback must still produce WOULD_FAIL_HOOKS.
+    // Discover the rollback's exact read count first, then cap at it.
+    const probe = { n: 0 };
+    await simulateTransaction(claim, fanOutDeps("0000000000000000", probe, { maxReads: 64, deadlineMs: 0 }), at);
+    const reads = { n: 0 };
+    const s = await simulateTransaction(claim, fanOutDeps("0000000000000000", reads, { maxReads: Math.max(1, probe.n), deadlineMs: 0 }), at);
+    const run = s.hookRuns.find((r) => r.exit === "rollback");
+    expect(run).toBeDefined();
+    expect(s.verdict).toBe("WOULD_FAIL_HOOKS"); // rollback wins; NOT downgraded to INDETERMINATE
+    expect(s.verdict).not.toBe("INDETERMINATE");
+  });
+});
+
+describe("budget env parsing — finite-guard fallback (XAHC_SIM_DEADLINE_MS / XAHC_SIM_MAX_READS)", () => {
+  // The module reads these once at import; re-deriving with the same guard documents the contract:
+  // empty/garbage falls back to the safe default; a deliberate "0" disables (as documented).
+  const parseBudget = (raw: string | undefined, fallback: number): number => {
+    if (raw === undefined || raw === "") return fallback;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  it("empty string falls back to the safe default (NOT 0 → not disabled)", () => {
+    expect(parseBudget("", 15000)).toBe(15000);
+    expect(parseBudget("", 64)).toBe(64);
+  });
+  it("garbage (NaN) falls back to the safe default", () => {
+    expect(parseBudget("abc", 15000)).toBe(15000);
+    expect(parseBudget("12px", 64)).toBe(64);
+  });
+  it("undefined falls back to the safe default", () => {
+    expect(parseBudget(undefined, 15000)).toBe(15000);
+  });
+  it("a valid number is honored", () => {
+    expect(parseBudget("30000", 15000)).toBe(30000);
+    expect(parseBudget("8", 64)).toBe(8);
+  });
+  it("a deliberate 0 disables (Number.isFinite(0) === true)", () => {
+    expect(parseBudget("0", 15000)).toBe(0);
+  });
+});

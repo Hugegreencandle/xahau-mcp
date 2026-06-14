@@ -26,6 +26,11 @@ export function runHookIsolated(
 ): Promise<SandboxResult> {
   return new Promise<SandboxResult>((resolve, reject) => {
     const worker = new Worker(WORKER_URL, {
+      // maxOldGenerationSizeMb caps the worker's V8 JS HEAP (host-side allocations: trace strings,
+      // state maps, the importObject closures). It does NOT bound the wasm LINEAR memory, which is an
+      // off-heap ArrayBuffer — that bound is the page-count gate in sandbox.ts (MAX_MEMORY_PAGES →
+      // 32 MiB) checked before instantiate. Together with the hard `timeout` below, those two are the
+      // real ceilings on an unbounded-allocation / runaway hook; the heap cap is a host-side backstop.
       resourceLimits: { maxOldGenerationSizeMb: memMb },
     });
     let settled = false;

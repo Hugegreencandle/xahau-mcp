@@ -69,6 +69,15 @@ export interface SimDeps {
   sleep?: (ms: number) => Promise<void>;
   /** inter-read spacing in ms; simdeps sets this from XAHC_SIM_SPACING_MS (own-node -> 0, public ~300). Defaults to SPACING_MS. */
   spacingMs?: number;
+  /** Overall wall-clock budget for the whole simulation, in ms. A crafted hook can chain
+   *  MAX_RESOLVE_ROUNDS × live reads at spacingMs each, pinning the few inflight RPC slots.
+   *  Once this deadline passes we STOP resolving further reads and mark the run degraded
+   *  (INDETERMINATE) instead of holding a slot indefinitely. Defaults to XAHC_SIM_DEADLINE_MS
+   *  (15000), or DEADLINE_MS when unset. 0/absent on a trusted in-process caller is fine. */
+  deadlineMs?: number;
+  /** Cumulative cap on resolved foreign-state/keylet reads across the whole request. Bounds the
+   *  RPC amplification a hostile hook can drive. Defaults to XAHC_SIM_MAX_READS (64), or MAX_READS. */
+  maxReads?: number;
 }
 
 export interface HookSimResult {
@@ -110,6 +119,22 @@ export interface Simulation {
 
 const SPACING_MS = 1100;
 const MAX_RESOLVE_ROUNDS = 8;
+// Overall request budgets — defend the single rate-limited node against RPC amplification by a
+// crafted hook (MAX_RESOLVE_ROUNDS × live reads at SPACING_MS each, pinning the few inflight slots).
+// Read from env so deployments can tune; deps.deadlineMs / deps.maxReads override per-call.
+// Guard with Number.isFinite (mirrors simdeps.ts spacingMs): `??` only catches undefined/null, so
+// XAHC_SIM_DEADLINE_MS="" → 0 (deadline silently DISABLED) and ="abc" → NaN (NaN>0 false AND
+// totalReads>=NaN false → BOTH deadline AND read-cap silently disabled). Empty/garbage must fall
+// back to the safe default; a deliberate 0 (Number.isFinite(0) === true) still disables, as documented.
+// NOTE: Number("") === 0 (finite), but an empty/unset var means "unconfigured" → safe default, not
+// "disable". Treat "" like undefined (as simdeps.ts does for spacing); only a literal "0" disables.
+const parseBudget = (raw: string | undefined, fallback: number): number => {
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+};
+const DEADLINE_MS = parseBudget(process.env.XAHC_SIM_DEADLINE_MS, 15000);
+const MAX_READS = parseBudget(process.env.XAHC_SIM_MAX_READS, 64);
 
 function extractParams(arr: unknown): Record<string, string> {
   const out: Record<string, string> = {};
@@ -149,6 +174,13 @@ export async function simulateTransaction(
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const runHookFn = opts.runHook ?? runHook;
   const spacing = deps.spacingMs ?? SPACING_MS;
+  // Overall request budgets (see DEADLINE_MS / MAX_READS). deadlineMs <= 0 disables the deadline.
+  const deadlineMs = deps.deadlineMs ?? DEADLINE_MS;
+  const maxReads = deps.maxReads ?? MAX_READS;
+  const startedAt = Date.now();
+  const deadlinePassed = () => deadlineMs > 0 && Date.now() - startedAt > deadlineMs;
+  let totalReads = 0; // cumulative resolved foreign-state/keylet reads across the whole request
+  let budgetExhausted = false; // set once deadline OR read-cap stops further resolution
   const notes: string[] = [];
   const staticChecks: PreflightCheck[] = [];
   const hookRuns: HookSimResult[] = [];
@@ -209,7 +241,13 @@ export async function simulateTransaction(
     const di = await deps.getAccountInfo(tx.Destination as string);
     const da = (di?.account_data ?? di) as Record<string, any> | null;
     destAcct = da;
-    if (!da) staticChecks.push({ name: "destination exists", status: typeof tx.Amount === "string" && BigInt(tx.Amount as string) >= 1_000_000n ? "WARN" : "FAIL", detail: `${tx.Destination} does not exist — payment must carry >= 1 XAH to create it (else tecNO_DST)` });
+    if (!da) {
+      // Account creation requires >= the live base reserve (transactorLite uses the same value);
+      // fall back to the 1 XAH static literal only when reserves couldn't be fetched.
+      const createThreshold = reserves ? reserves.baseDrops : 1_000_000n;
+      const thresholdLabel = reserves ? `${createThreshold} drops (live base reserve)` : `1 XAH (STATIC fallback — reserves unavailable)`;
+      staticChecks.push({ name: "destination exists", status: typeof tx.Amount === "string" && BigInt(tx.Amount as string) >= createThreshold ? "WARN" : "FAIL", detail: `${tx.Destination} does not exist — payment must carry >= ${thresholdLabel} to create it (else tecNO_DST)` });
+    }
     else {
       const requireTag = ((da.Flags ?? 0) & 0x00020000) !== 0; // lsfRequireDestTag
       if (requireTag && tx.DestinationTag === undefined) staticChecks.push({ name: "destination tag", status: "FAIL", detail: "destination requires a DestinationTag (tecDST_TAG_NEEDED)" });
@@ -258,6 +296,12 @@ export async function simulateTransaction(
   // ---------- run each stakeholder's hook chain ----------
   let strongRejection: HookSimResult | null = null;
   for (const sh of stakeholders) {
+    // overall budget blown — don't open any more stakeholder chains (each costs node reads)
+    if (budgetExhausted || deadlinePassed()) {
+      budgetExhausted = true;
+      notes.push(`request budget exhausted before simulating ${sh.role} (${sh.account}) — its hook chain was NOT fetched/run (verdict INDETERMINATE)`);
+      break;
+    }
     const candidate = opts.candidateHooks?.[sh.account];
     let hooks: Record<string, any>[];
     if (candidate) {
@@ -302,6 +346,7 @@ export async function simulateTransaction(
       const keyletBlobs: Record<string, string | null> = {};
       let r: SandboxResult | null = null;
       let resolved = 0;
+      let runDegradedByBudget = false; // this hook stopped resolving due to deadline/read-cap
       for (let round = 0; round < MAX_RESOLVE_ROUNDS; round++) {
         const ctx = reconstructContext(tx, accountId, closeTime, undefined, foreignState, keyletBlobs, Object.keys(params).length ? params : undefined);
         ctx.hookHash = hash;
@@ -311,17 +356,24 @@ export async function simulateTransaction(
         const wantsF = r.wantedForeignState.filter((k) => !(k in foreignState));
         const wantsK = r.wantedKeylets.filter((k) => !(k in keyletBlobs));
         if (!wantsF.length && !wantsK.length) break;
+        // Stop resolving (leave the run degraded) once we'd blow the overall deadline or the
+        // cumulative read cap — a hostile hook can't hold an inflight slot or hammer the node.
+        if (deadlinePassed() || totalReads >= maxReads) { runDegradedByBudget = true; budgetExhausted = true; break; }
         let progressed = false;
         for (const composite of wantsF) {
+          if (deadlinePassed() || totalReads >= maxReads) { runDegradedByBudget = true; budgetExhausted = true; break; }
           const [acc, ns, key] = composite.split("|");
           await sleep(spacing);
           const fv = await deps.getHookState(acc, ns, key);
+          totalReads++;
           if (fv === undefined) continue; // unavailable — stays degraded
           foreignState[composite] = fv; resolved++; progressed = true;
         }
         for (const idx of wantsK) {
+          if (deadlinePassed() || totalReads >= maxReads) { runDegradedByBudget = true; budgetExhausted = true; break; }
           await sleep(spacing);
           const blob = await deps.getLedgerObject(idx);
+          totalReads++;
           if (blob === undefined) continue; // unavailable — stays degraded
           keyletBlobs[idx] = blob; resolved++; progressed = true; // string or confirmed-absent null
         }
@@ -331,11 +383,14 @@ export async function simulateTransaction(
       const run: HookSimResult = {
         role: sh.role, account: sh.account, position: pos, hookHash: hash, strong: sh.strong, fired: true,
         exit: r!.exit, returnCode: r!.returnCode, returnString: r!.returnString,
-        degraded: r!.degraded, unsupportedCalls: r!.unsupportedCalls, syntheticCalls: r!.syntheticCalls,
+        degraded: r!.degraded || runDegradedByBudget, unsupportedCalls: r!.unsupportedCalls, syntheticCalls: r!.syntheticCalls,
         stateWrites: r!.stateWrites, foreignStateWrites: r!.foreignStateWrites,
         emitted: r!.emitted.length ? inspectEmitted(r!.emitted) : null,
         resolvedReads: resolved,
       };
+      if (runDegradedByBudget) {
+        notes.push(`request budget exhausted (${deadlinePassed() ? `>${deadlineMs}ms overall deadline` : `${maxReads}-read cumulative cap`}) while resolving ${sh.role} hook ${hash.slice(0, 12)}… — stopped fetching its reads; run forced degraded → verdict INDETERMINATE (not a pass)`);
+      }
       hookRuns.push(run);
       if (sh.strong && r!.exit === "rollback" && !strongRejection) strongRejection = run;
       if (sh.strong && r!.exit === "rollback") break; // chain stops at first strong rollback
@@ -347,7 +402,10 @@ export async function simulateTransaction(
   const fired = hookRuns.filter((x) => x.fired && !x.skippedReason);
   const anyDegraded = fired.some((x) => x.degraded);
   let verdict: Simulation["verdict"];
+  // A real strong rollback we DID observe is authoritative even if the budget later ran out.
   if (strongRejection) verdict = "WOULD_FAIL_HOOKS";
+  // Budget exhaustion means we couldn't finish — never report a pass; treat as unknown.
+  else if (budgetExhausted) verdict = "INDETERMINATE";
   else if (!fired.length) verdict = "NO_HOOKS_FIRE";
   else if (anyDegraded) verdict = "INDETERMINATE";
   else verdict = "WOULD_PASS_HOOKS";

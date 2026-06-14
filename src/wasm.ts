@@ -145,6 +145,10 @@ function readLimits(s: Reader): { min: number; max: number | null } {
 // Best-effort linear opcode walk to count `loop` (0x03) and `call _g`.
 // Skips operands for standard opcodes to keep alignment; bails (scanComplete=false)
 // on an unrecognized opcode so counts become lower bounds rather than garbage.
+// NOTE: only `loop` opcodes are counted, so this scan (and the loopCount>guardCallCount gate in
+// sandbox.ts that consumes it) bounds ITERATION, not RECURSION. A non-_g recursive cycle has no
+// `loop` opcode and is invisible here; that case is bounded at runtime by the V8 wasm stack trap
+// (in-process) plus the worker timeout on the public shim (isolated.ts), not by the _g budget.
 function scanCode(code: Uint8Array, info: WasmInfo): void {
   const s = new Reader(code);
   const funcCount = s.uleb();
