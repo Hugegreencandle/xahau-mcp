@@ -6,6 +6,17 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server for the **[Xa
 
 ![xahau-mcp v2.0 flight simulator demo](demo/xahau-mcp-v2-flight-simulator.gif)
 
+## The trifecta — safe Hooks, end to end
+
+Three open-source tools, one workflow: **write → simulate one tx → prove all inputs.**
+xahau-mcp is the **simulate** stage.
+
+| stage | tool | what it does |
+|---|---|---|
+| **write** | [xahc](https://github.com/Hugegreencandle/xahc) | author + compile a safe Hook to clean, lint-passed WASM |
+| **simulate one** | [xahau-mcp](https://github.com/Hugegreencandle/xahau-mcp) | run the real bytecode against one live transaction |
+| **prove all** | [xahc-prover](https://github.com/Hugegreencandle/xahc-prover) | prove an invariant holds for every input in scope — or return the counterexample |
+
 ## Why it's useful
 
 Point any MCP-capable agent (Claude, etc.) at this server and it can:
@@ -146,7 +157,7 @@ Or clone and build:
 git clone https://github.com/Hugegreencandle/xahau-mcp && cd xahau-mcp
 npm install        # the `prepare` script compiles dist/ automatically
 npm run smoke      # health check + a live mainnet read
-npm test           # 278 tests (offline)
+npm test           # 298 tests (offline)
 ```
 
 Also published to **GitHub Packages** as `@hugegreencandle/xahau-mcp`. GitHub Packages requires auth even for public installs, so add to your `.npmrc`:
