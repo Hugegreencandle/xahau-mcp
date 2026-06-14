@@ -165,6 +165,13 @@ export async function simulateTransaction(
   await sleep(spacing);
   const senderInfo = await deps.getAccountInfo(sender);
   const sa = (senderInfo?.account_data ?? senderInfo) as Record<string, any> | null;
+  // Fetch real reserve params ONCE — single source for the static balance check AND the transactor
+  // block below. Falls back to a STATIC 1 XAH base / 0 owner reserve only when getReserves is absent.
+  let reserves: { baseDrops: bigint; incDrops: bigint } | null = null;
+  if (sa && deps.getReserves) {
+    await sleep(spacing);
+    try { reserves = await deps.getReserves(); } catch { /* fall back to static approximation */ }
+  }
   if (!sa) staticChecks.push({ name: "sender exists", status: "FAIL", detail: `${sender} not found on this network` });
   else {
     staticChecks.push({ name: "sender exists", status: "PASS", detail: sender });
@@ -180,10 +187,17 @@ export async function simulateTransaction(
     }
     if (txType === "Payment" && typeof tx.Amount === "string" && typeof sa.Balance === "string") {
       const need = BigInt(tx.Amount as string) + BigInt(String(tx.Fee ?? "100000"));
-      const spendable = BigInt(sa.Balance) - 1_000_000n; // base reserve, STATIC approximation
+      // Real reserve when available: base + ownerCount*inc (matches transactorLite). Falls back to
+      // the static 1 XAH base / 0 owner reserve only when getReserves is unavailable.
+      const ownerCount = BigInt(Math.max(0, Number(sa.OwnerCount ?? 0)));
+      const reserve = reserves ? reserves.baseDrops + ownerCount * reserves.incDrops : 1_000_000n;
+      const spendable = BigInt(sa.Balance) - reserve;
+      const reserveNote = reserves
+        ? `after ${reserve} drops reserve (base ${reserves.baseDrops} + ${ownerCount} owner × ${reserves.incDrops})`
+        : `after 1 XAH base reserve; owner reserve NOT counted — STATIC fallback`;
       staticChecks.push(need <= spendable
-        ? { name: "balance", status: "PASS", detail: `amount+fee within spendable balance` }
-        : { name: "balance", status: "FAIL", detail: `amount+fee ${need} drops exceeds spendable ~${spendable} drops (after 1 XAH base reserve; owner reserve NOT counted — STATIC check)` });
+        ? { name: "balance", status: "PASS", detail: `amount+fee within spendable balance (${reserveNote})` }
+        : { name: "balance", status: "FAIL", detail: `amount+fee ${need} drops exceeds spendable ~${spendable} drops (${reserveNote})` });
     }
   }
   if (tx.LastLedgerSequence !== undefined && !historical && Number(tx.LastLedgerSequence) <= ledgerIndex) {
@@ -204,9 +218,8 @@ export async function simulateTransaction(
 
   // ---------- approximate transactor (stand-in for the missing `simulate` RPC) ----------
   let transactor: TransactorPrediction | null = null;
-  if (sa && deps.getReserves) {
+  if (sa && reserves) {
     try {
-      const reserves = await deps.getReserves();
       let senderLines: Record<string, any>[] = [];
       const iouPayment = txType === "Payment" && tx.Amount !== null && typeof tx.Amount === "object";
       if ((iouPayment || txType === "TrustSet") && deps.getAccountLines) {
