@@ -113,7 +113,7 @@ export function computePrediction(node: AmendmentsNode, network: Network, nowUni
       ? `${pending.length} amendment(s) hold majority and are counting toward enablement on ${network}`
       : `no amendments currently hold majority on ${network}`,
     caveat:
-      "ETA assumes support is sustained. If support drops below 80% (tfLostMajority) the window resets. Per-validator votes require an admin `feature` call.",
+      "ETA is APPROXIMATE: it models the >80%-for-5-days majority window only and does NOT include the protocol's flag-ledger +2 step — enablement actually lands at the next flag ledger plus 2, so the true activation is at or slightly after estimatedEnableAt, not before. ETA also assumes support is sustained; if support drops below 80% (tfLostMajority) the window resets. Per-validator votes require an admin `feature` call.",
   };
 }
 
