@@ -135,6 +135,13 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 | `governance_state` | **Full live decode of the Governance Game**: all 20 seats + members, member count, live reward rate/delay, every open vote (who voted what) and every tally with its threshold (80% membership / 100% else) and reached-flag. Layout canonical from `xahaud hook/genesis/govern.c`. |
 | `decode_b2m` | Burn2Mint classification. |
 
+**Audit / forensics**
+| Tool | Purpose |
+|---|---|
+| `trace_transaction_stakeholders` | Every account a tx touched, from metadata. The **Touch** amendment forces all stakeholders into metadata, so this is the authoritative participant list (roles + entry types + materially-changed flag). |
+| `verify_double_threading` | Structural audit of a tx's metadata threading; flags the duplicate-node symptom `fixProvisionalDoubleThreading` addressed. |
+| `audit_account_remarks` | Decode the **Remarks** attached to an account's objects (name/value hex→text, immutable flag) — dynamic-NFT and annotation patterns. |
+
 **Unsigned builders (no keys, testnet-default)**
 | Tool | Purpose |
 |---|---|

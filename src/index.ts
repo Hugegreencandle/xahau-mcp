@@ -36,6 +36,7 @@ import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, H
 import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { diagnoseFailedTx } from "./diagnose.js";
+import { traceTransactionStakeholders, verifyDoubleThreading, auditAccountRemarks } from "./audit.js";
 import { decodeGovernance } from "./governanceDecode.js";
 import { simulateTransaction } from "./simulate.js";
 import { simDeps } from "./simdeps.js";
@@ -762,6 +763,32 @@ server.registerTool("diagnose_failed_tx", {
     });
     return ok(d.summary, d as unknown as Record<string, unknown>);
   } catch (e) { return fail((e as Error).message); }
+});
+
+/* ===================== Tier H — audit / forensics ===================== */
+
+server.registerTool("trace_transaction_stakeholders", {
+  description: "Every account a transaction touched, from its metadata (AffectedNodes). Because the Touch amendment forces all transactional stakeholders into metadata — even ones nothing else changed for — this is the authoritative participant list, not a guess from tx fields. Returns each account with its roles, the ledger entry types it appeared in, and whether it materially changed. 1 RPC read.",
+  inputSchema: { txHash: z.string().length(64), network: NET },
+}, async ({ txHash, network }) => {
+  try { const r = await traceTransactionStakeholders(txHash, network as Net); return ok(`${r.stakeholderCount} stakeholder(s) in ${txHash.slice(0, 12)}…`, r as Record<string, unknown>); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("verify_double_threading", {
+  description: "Structural audit of a transaction's metadata threading — lists each affected ledger object's PreviousTxnID / PreviousTxnLgrSeq and flags the duplicate-node symptom that fixProvisionalDoubleThreading addressed (a single ledger object touched by more than one AffectedNodes entry). Metadata-only check; does not walk the full cross-ledger thread. 1 RPC read.",
+  inputSchema: { txHash: z.string().length(64), network: NET },
+}, async ({ txHash, network }) => {
+  try { const r = await verifyDoubleThreading(txHash, network as Net); return ok(r.summary, r as Record<string, unknown>); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("audit_account_remarks", {
+  description: "Read the Remarks (Remarks amendment) attached to an account's owned ledger objects — decoded name/value (hex→text where printable) with the immutable flag surfaced. Useful for dynamic-NFT patterns and object annotations. 1 RPC read.",
+  inputSchema: { account: z.string().min(25), network: NET },
+}, async ({ account, network }) => {
+  try { const r = await auditAccountRemarks(account, network as Net); return ok(r.summary, r as Record<string, unknown>); }
+  catch (e) { return fail((e as Error).message); }
 });
 
 
