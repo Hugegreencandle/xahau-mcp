@@ -102,6 +102,9 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 | Tool | Purpose |
 |---|---|
 | `decode_hook_on` / `encode_hook_on` | HookOn bitmap ⇄ transaction-type list. |
+| `decode_hook_can_emit` / `encode_hook_can_emit` | HookCanEmit bitmap ⇄ the tx types a hook may **emit** (HookCanEmit amendment; absent = may emit anything). |
+| `estimate_hook_state_cost` | ExtendedHookState reserve math: value bytes + scale (1–16) → per-entry capacity (256×scale), reserve units (= scale), totals, overflow + min-scale warnings, optional XAH. |
+| `simulate_hook_trigger` | Static (no-RPC, no-bytecode) prediction of which accounts' hooks a tx would invoke, strong (can rollback) vs weak. Complements `simulate_transaction`. |
 | `decode_sethook` | A SetHook tx → its hook definitions, HookOn decoded. |
 | `decode_tx_blob` / `encode_tx_blob` | Xahau tx blob ⇄ JSON (unsigned). |
 | `decode_uritoken_id` · `xah_amount` | URIToken ID validation · XAH⇄drops. |
