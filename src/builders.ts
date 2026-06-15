@@ -124,6 +124,9 @@ function normalizeRemitAmount(a: RemitAmount, idx: number): string | Record<stri
   if (!validateAddress(a.issuer ?? "").valid) throw new Error(`amounts[${idx}]: issuer is not a valid r-address`);
   if (a.value === undefined || a.value === "" || Number.isNaN(Number(a.value))) throw new Error(`amounts[${idx}]: issued amount needs a numeric value`);
   const cc = currencyCode(a.currency); // throws on a bad code; canonicalizes 3-char ⇄ 40-hex
+  // XAH is the native currency and has no issuer — an issued-amount object claiming currency XAH is a
+  // wrong-effect amount a signer could be misled into. Reject it and steer to the native drops-string form.
+  if (cc.code === "XAH") throw new Error(`amounts[${idx}]: XAH is native and has no issuer — pass it as an integer drops string (e.g. "1000000"), not an issued-amount object`);
   return { currency: cc.standard && cc.code ? cc.code : cc.hex, issuer: a.issuer.trim(), value: String(a.value) };
 }
 

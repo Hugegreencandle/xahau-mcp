@@ -50,6 +50,9 @@ describe("buildRemitUnsigned — Amounts nesting (canonical AmountEntry wrapper)
   it("rejects an issued amount with a bad issuer", () => {
     expect(() => buildRemitUnsigned({ account: ACCT, destination: DEST, amounts: [{ currency: "USD", issuer: "notanaddr", value: "1" }] })).toThrow(/issuer/);
   });
+  it("rejects an issued-amount object claiming native XAH (wrong-effect amount)", () => {
+    expect(() => buildRemitUnsigned({ account: ACCT, destination: DEST, amounts: [{ currency: "XAH", issuer: ISSUER, value: "1" }] })).toThrow(/native/);
+  });
 });
 
 describe("buildRemitUnsigned — URITokens", () => {
