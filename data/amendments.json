@@ -1,0 +1,38 @@
+{
+  "_note": "Known amendment names for Xahau + ported XRPL amendments. Amendment ID = SHA512-Half(ASCII name), uppercase hex. Used to resolve on-ledger amendment IDs to human names; unknown IDs degrade to their raw hash. Add new names here as amendments are introduced — no code change needed. Verified against live mainnet Amendments object 2026-06-15 (60/63 enabled IDs resolved; the 3 unnamed are recently-ported XRPL amendments — add their names here to resolve them, no code change needed).",
+  "names": [
+    "XahauGenesis", "Hooks", "HooksUpdate1", "HookCanEmit", "ExtendedHookState",
+    "Remit", "Remarks", "Touch", "Cron", "ZeroB2M", "Import", "URIToken",
+    "IOUIssuerWeakTSH", "Clawback", "DeepFreeze", "PaychanAndEscrowForTokens",
+    "MultiSign", "DepositAuth", "DepositPreauth", "OwnerPaysFee",
+    "fixXahauV1", "fixXahauV2", "fixXahauV3", "fixNSDelete", "fix240819",
+    "fix240911", "fixPageCap", "fixFloatDivide", "fixReduceImport", "fix20250131",
+    "fixRewardClaimFlags", "fixProvisionalDoubleThreading", "fixInvalidTxFlags",
+    "fixCronStacking",
+    "TrustSetAuth", "FeeEscalation", "PayChan", "Flow", "CryptoConditions",
+    "TickSize", "fix1368", "Escrow", "CryptoConditionsSuite", "fix1373",
+    "EnforceInvariants", "FlowCross", "SortedDirectories", "fix1201", "fix1512",
+    "fix1513", "fix1523", "fix1528", "Checks", "fix1571", "fix1543", "fix1623",
+    "fix1515", "fix1578", "MultiSignReserve", "fixTakerDryOfferRemoval",
+    "fixMasterKeyAsRegularKey", "fixCheckThreading", "fixPayChanRecipientOwnerDir",
+    "DeletableAccounts", "fixQualityUpperBound", "RequireFullyCanonicalSig",
+    "fix1781", "HardenedValidations", "fixAmendmentMajorityCalc", "NegativeUNL",
+    "TicketBatch", "FlowSortStrands", "fixSTAmountCanonicalize",
+    "fixRmSmallIncreasedQOffers", "CheckCashMakesTrustLine", "ExpandedSignerList",
+    "NonFungibleTokensV1", "fixNFTokenDirV1", "fixNFTokenNegOffer",
+    "NonFungibleTokensV1_1", "fixTrustLinesToSelf", "fixRemoveNFTokenAutoTrustLine",
+    "ImmediateOfferKilled", "DisallowIncoming", "fixUniversalNumber",
+    "fixNonFungibleTokensV1_2", "fixNFTokenRemint", "fixReducedOffersV1", "AMM",
+    "fixDisallowIncomingV1", "XChainBridge", "fixFillOrKill", "fixNFTokenReserve",
+    "fixInnerObjTemplate", "fixAMMOverflowOffer", "PriceOracle", "fixEmptyDID",
+    "fixXChainRewardRounding", "fixPreviousTxnID", "fixAMMv1_1", "NFTokenMintOffer",
+    "fixReducedOffersV2", "fixEnforceNFTokenTrustline", "fixInnerObjTemplate2",
+    "InvariantsV1_1", "fixNFTokenPageLinks", "fixUNLReport"
+  ],
+  "categories": {
+    "_doc": "Optional grouping hints for Xahau-native amendments (see Xahau docs Known Amendments).",
+    "XahauGenesis": "feature", "Hooks": "feature", "HooksUpdate1": "feature",
+    "HookCanEmit": "feature", "ExtendedHookState": "feature", "Remit": "feature",
+    "Remarks": "feature", "Touch": "feature", "Cron": "feature", "ZeroB2M": "feature"
+  }
+}

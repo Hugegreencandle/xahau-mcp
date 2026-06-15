@@ -28,11 +28,12 @@ import { scaffoldHook } from "./scaffold.js";
 import { computeReward } from "./rewards.js";
 import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
+import { getAmendmentStatus, predictAmendmentActivation, diffNodeAmendments, checkAmendmentBlocked } from "./amendments.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned } from "./builders.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
-import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT } from "./outputSchemas.js";
+import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT, AMENDMENT_STATUS_OUT, AMENDMENT_PREDICT_OUT, AMENDMENT_BLOCKED_OUT, AMENDMENT_DIFF_OUT } from "./outputSchemas.js";
 import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { diagnoseFailedTx } from "./diagnose.js";
@@ -827,6 +828,44 @@ server.registerTool("decode_b2m", {
   description: "Heuristically classify a Burn2Mint-related transaction (XRPL↔Xahau bridge direction). Offline.",
   inputSchema: { tx: z.record(z.string(), z.unknown()) },
 }, async ({ tx }) => { const d = decodeB2M(tx as Record<string, unknown>); return ok(`${d.transactionType}: ${d.direction}`, d); });
+
+/* ===================== Tier F — amendment intelligence (read-only, no admin) ===================== */
+
+server.registerTool("get_amendment_status", {
+  description: "Live amendment status for the network: every ENABLED amendment (resolved to its human name where known, raw hash otherwise) plus any in the VOTING set (already at >80% support, counting toward enablement). Reads the on-ledger Amendments singleton — no admin node needed. 1 RPC read.",
+  inputSchema: { network: NET },
+  outputSchema: AMENDMENT_STATUS_OUT,
+}, async ({ network }) => {
+  try { const r = await getAmendmentStatus(network as Net); return ok(r.summary, r as Record<string, unknown>); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("predict_amendment_activation", {
+  description: "Project when amendments now holding majority will enable. For each amendment in the on-ledger Majorities set: when it reached >80% support and its estimated enable time (majority + 5-day Xahau window), with seconds/days remaining. Reads the Amendments singleton — no admin node needed. 1 RPC read.",
+  inputSchema: { network: NET },
+  outputSchema: AMENDMENT_PREDICT_OUT,
+}, async ({ network }) => {
+  try { const r = await predictAmendmentActivation(network as Net); return ok(r.summary, r as Record<string, unknown>); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("check_amendment_blocked", {
+  description: "Report whether the configured RPC node for this network is AMENDMENT BLOCKED (running xahaud too old to understand an enabled amendment — can't validate, submit, or vote), plus its build version and validated ledger. Reads server_info. Checks the network's fixed endpoint (no arbitrary-URL input, by design). 1 RPC read.",
+  inputSchema: { network: NET },
+  outputSchema: AMENDMENT_BLOCKED_OUT,
+}, async ({ network }) => {
+  try { const r = await checkAmendmentBlocked(network as Net); return ok(r.summary, r as Record<string, unknown>); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("diff_node_amendments", {
+  description: "Diff the enabled-amendment sets of two networks (e.g. mainnet vs testnet) — what's enabled on one but not the other, by name where known. Explains why a transaction or Hook feature works on one network but not the other. 2 RPC reads.",
+  inputSchema: { a: NET.default("mainnet"), b: NET.default("testnet") },
+  outputSchema: AMENDMENT_DIFF_OUT,
+}, async ({ a, b }) => {
+  try { const r = await diffNodeAmendments(a as Net, b as Net); return ok(r.summary, r as Record<string, unknown>); }
+  catch (e) { return fail((e as Error).message); }
+});
 
 /* ===================== Tier E — unsigned tx builders (no keys) ===================== */
 

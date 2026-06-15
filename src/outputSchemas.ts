@@ -118,3 +118,19 @@ export const SIMULATE_OUT = {
   notes: arr, caveat: str,
   baseTxHash: str, overriddenFields: arr, ...err,
 };
+
+// ---- Tier F: amendment intelligence ----
+export const AMENDMENT_STATUS_OUT = {
+  network: str, enabledCount: num, votingCount: num, namedCount: num, unnamedCount: num,
+  knownNameTableSize: num, enabled: arr, voting: arr, summary: str, caveat: str, ...err,
+};
+export const AMENDMENT_PREDICT_OUT = {
+  network: str, majorityWindowDays: num, pendingCount: num, pending: arr, summary: str, caveat: str, ...err,
+};
+export const AMENDMENT_BLOCKED_OUT = {
+  network: str, amendmentBlocked: bool, buildVersion: str, networkId: z.unknown().optional(),
+  validatedLedger: z.unknown().optional(), summary: str, remedy: str, note: str, ...err,
+};
+export const AMENDMENT_DIFF_OUT = {
+  a: str, b: str, enabledA: num, enabledB: num, onlyOnA: arr, onlyOnB: arr, summary: str, ...err,
+};

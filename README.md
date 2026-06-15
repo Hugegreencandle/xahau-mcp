@@ -135,6 +135,14 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 | `governance_state` | **Full live decode of the Governance Game**: all 20 seats + members, member count, live reward rate/delay, every open vote (who voted what) and every tally with its threshold (80% membership / 100% else) and reached-flag. Layout canonical from `xahaud hook/genesis/govern.c`. |
 | `decode_b2m` | Burn2Mint classification. |
 
+**Amendment intelligence (read-only, no admin node)**
+| Tool | Purpose |
+|---|---|
+| `get_amendment_status` | Every **enabled** amendment (resolved to its human name where known, raw hash otherwise) + any in the **voting** set (already >80%, counting toward enablement). Reads the on-ledger Amendments singleton — no admin `feature` call needed. |
+| `predict_amendment_activation` | For each amendment holding majority: when it reached >80% and its estimated enable time (majority + Xahau's 5-day window), with days remaining and an eligible-now flag. |
+| `check_amendment_blocked` | Is the configured node **amendment blocked** (xahaud too old to read an enabled amendment)? Build version, validated ledger, upgrade remedy. |
+| `diff_node_amendments` | Diff enabled-amendment sets across two networks (e.g. mainnet vs testnet) — explains why a tx/Hook feature works on one but not the other. |
+
 **Unsigned builders (no keys, testnet-default)**
 | Tool | Purpose |
 |---|---|
