@@ -28,8 +28,12 @@ import { validateAddress } from "./util.js";
 import { predictTransactor, TRANSACTOR_SUPPORTED, type TransactorPrediction } from "./transactorLite.js";
 
 /** applyHook.cpp getTransactionalStakeHolders — the statically-derivable rows.
- *  field: top-level tx field holding an account; strong: can rollback. */
-export const TSH_TABLE: Record<string, { field: string; strong: boolean }[]> = {
+ *  field: top-level tx field holding an account; strong: can rollback.
+ *  Two minimal extensions for stakeholders that aren't a top-level account string:
+ *   - amountIssuerOf: read the `.issuer` of an issued-amount object at this field (TrustSet/Clawback).
+ *   - arrayAccountOf: iterate an array of wrapper objects, reading `inner[wrapper][account]`
+ *     from each entry (SignerListSet/GenesisMint). */
+export const TSH_TABLE: Record<string, { field: string; strong: boolean; amountIssuerOf?: boolean; arrayAccountOf?: { wrapper: string; account: string } }[]> = {
   Payment: [{ field: "Destination", strong: true }],
   Invoke: [{ field: "Destination", strong: true }],
   EscrowCreate: [{ field: "Destination", strong: true }],
@@ -44,11 +48,46 @@ export const TSH_TABLE: Record<string, { field: string; strong: boolean }[]> = {
   URITokenCreateSellOffer: [{ field: "Destination", strong: true }],
   Remit: [{ field: "Destination", strong: true }, { field: "Inform", strong: false }],
   Import: [{ field: "Issuer", strong: false }],
+  // weak: the token issuer of the trustline being set (LimitAmount.issuer)
+  TrustSet: [{ field: "LimitAmount", strong: false, amountIssuerOf: true }],
+  // weak: the holder being clawed from is Amount.issuer (Clawback's counter-intuitive shape)
+  Clawback: [{ field: "Amount", strong: false, amountIssuerOf: true }],
+  // strong: each signer in the new signer list
+  SignerListSet: [{ field: "SignerEntries", strong: true, arrayAccountOf: { wrapper: "SignerEntry", account: "Account" } }],
+  // weak: each mint destination
+  GenesisMint: [{ field: "GenesisMints", strong: false, arrayAccountOf: { wrapper: "GenesisMint", account: "Destination" } }],
   // no extra stakeholders:
   AccountSet: [], OfferCancel: [], TicketCreate: [], SetHook: [], OfferCreate: [],
 };
 // stakeholders that would need ledger-object lookups we don't perform — flagged, not guessed
 export const TSH_PARTIAL = new Set(["EscrowFinish", "EscrowCancel", "CheckCash", "CheckCancel", "PaymentChannelFund", "PaymentChannelClaim", "URITokenBuy", "URITokenBurn", "URITokenCancelSellOffer", "NFTokenAcceptOffer", "NFTokenCancelOffer", "NFTokenBurn", "NFTokenCreateOffer"]);
+
+type TshRow = { field: string; strong: boolean; amountIssuerOf?: boolean; arrayAccountOf?: { wrapper: string; account: string } };
+
+/** Resolve a TSH_TABLE row into the concrete stakeholder account string(s) on a given tx.
+ *  Handles top-level account fields, amount-object issuers, and arrays of wrapper objects. */
+export function tshAccountsForRow(tx: Record<string, unknown>, r: TshRow): string[] {
+  const v = (tx as any)[r.field];
+  if (r.amountIssuerOf) {
+    // issued-amount object { currency, issuer, value }; native (string) amounts have no issuer
+    const iss = v && typeof v === "object" ? (v as any).issuer : undefined;
+    return typeof iss === "string" ? [iss] : [];
+  }
+  if (r.arrayAccountOf) {
+    if (!Array.isArray(v)) return [];
+    const out: string[] = [];
+    for (const entry of v) {
+      // entries may be wrapped ({ SignerEntry: { Account } }) or flat ({ Account })
+      const inner = entry && typeof entry === "object" && (entry as any)[r.arrayAccountOf.wrapper]
+        ? (entry as any)[r.arrayAccountOf.wrapper]
+        : entry;
+      const acct = inner && typeof inner === "object" ? (inner as any)[r.arrayAccountOf.account] : undefined;
+      if (typeof acct === "string") out.push(acct);
+    }
+    return out;
+  }
+  return typeof v === "string" ? [v] : [];
+}
 
 /** Static, no-RPC, no-bytecode prediction of which accounts' hooks a transaction WOULD invoke,
  *  with strong/weak (rollback-capable) roles. Derived from the statically-known TSH table; for tx
@@ -65,8 +104,14 @@ export function staticStakeholders(tx: Record<string, unknown>) {
     notes.push("tx has no TransactionType — only the originator could be determined");
   } else if (TSH_TABLE[txType]) {
     for (const r of TSH_TABLE[txType]) {
-      const v = tx[r.field];
-      if (typeof v === "string" && v !== sender) stakeholders.push({ account: v, role: `TSH:${r.field}`, strong: r.strong });
+      for (const acct of tshAccountsForRow(tx, r)) {
+        if (acct !== sender) stakeholders.push({ account: acct, role: `TSH:${r.field}`, strong: r.strong });
+      }
+    }
+    // Remit per-URIToken issuer TSH is ledger-derived (URIToken object lookup), not statically known.
+    if (txType === "Remit" && Array.isArray((tx as any).URITokenIDs) && (tx as any).URITokenIDs.length) {
+      partial = true;
+      notes.push("Remit: each transferred URIToken's issuer is also a (weak) stakeholder, but the issuer is stored on the URIToken ledger object — not derivable from URITokenIDs alone. Incomplete without a ledger read.");
     }
   } else if (TSH_PARTIAL.has(txType)) {
     partial = true;
@@ -321,8 +366,9 @@ export async function simulateTransaction(
   const rows = TSH_TABLE[txType];
   if (rows) {
     for (const r of rows) {
-      const v = (tx as Record<string, any>)[r.field];
-      if (typeof v === "string" && v !== sender) stakeholders.push({ account: v, role: `TSH:${r.field} (${r.strong ? "strong" : "weak"})`, strong: r.strong, outgoing: false });
+      for (const acct of tshAccountsForRow(tx as Record<string, unknown>, r)) {
+        if (acct !== sender) stakeholders.push({ account: acct, role: `TSH:${r.field} (${r.strong ? "strong" : "weak"})`, strong: r.strong, outgoing: false });
+      }
     }
   } else if (TSH_PARTIAL.has(txType)) {
     notes.push(`${txType}: additional stakeholders are derived from ledger objects (escrow/check/offer owners) which this simulator does not auto-collect — their hooks are NOT simulated (honest gap)`);

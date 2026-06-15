@@ -69,4 +69,43 @@ describe("staticStakeholders", () => {
     const r = staticStakeholders({ TransactionType: "Payment", Account: A, Destination: A });
     expect(r.stakeholderCount).toBe(1);
   });
+
+  it("adds the trustline issuer as a weak stakeholder for TrustSet", () => {
+    const r = staticStakeholders({ TransactionType: "TrustSet", Account: A, LimitAmount: { currency: "USD", issuer: B, value: "100" } });
+    const iss = r.stakeholders.find((s) => s.account === B)!;
+    expect(iss).toMatchObject({ account: B, strong: false });
+    expect(r.weakCount).toBe(1);
+  });
+
+  it("adds the holder (Amount.issuer) as a weak stakeholder for Clawback", () => {
+    const r = staticStakeholders({ TransactionType: "Clawback", Account: A, Amount: { currency: "USD", issuer: B, value: "5" } });
+    const holder = r.stakeholders.find((s) => s.account === B)!;
+    expect(holder).toMatchObject({ account: B, strong: false });
+  });
+
+  it("adds each signer entry as a strong stakeholder for SignerListSet", () => {
+    const r = staticStakeholders({
+      TransactionType: "SignerListSet", Account: A,
+      SignerEntries: [{ SignerEntry: { Account: B, SignerWeight: 1 } }, { SignerEntry: { Account: C, SignerWeight: 1 } }],
+    });
+    expect(r.stakeholders.find((s) => s.account === B)).toMatchObject({ strong: true });
+    expect(r.stakeholders.find((s) => s.account === C)).toMatchObject({ strong: true });
+    expect(r.strongCount).toBe(3); // originator + 2 signers
+  });
+
+  it("adds each mint destination as a weak stakeholder for GenesisMint", () => {
+    const r = staticStakeholders({
+      TransactionType: "GenesisMint", Account: A,
+      GenesisMints: [{ GenesisMint: { Destination: B, Amount: "1000000" } }, { GenesisMint: { Destination: C, Amount: "2000000" } }],
+    });
+    expect(r.stakeholders.find((s) => s.account === B)).toMatchObject({ strong: false });
+    expect(r.stakeholders.find((s) => s.account === C)).toMatchObject({ strong: false });
+    expect(r.weakCount).toBe(2);
+  });
+
+  it("flags partial when a Remit carries URITokenIDs (per-URIToken issuer is ledger-derived)", () => {
+    const r = staticStakeholders({ TransactionType: "Remit", Account: A, Destination: B, URITokenIDs: ["A".repeat(64)] });
+    expect(r.partial).toBe(true);
+    expect(r.notes.join(" ")).toMatch(/URIToken/);
+  });
 });
