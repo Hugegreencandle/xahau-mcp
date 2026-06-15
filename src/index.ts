@@ -37,7 +37,8 @@ import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { diagnoseFailedTx } from "./diagnose.js";
 import { decodeGovernance } from "./governanceDecode.js";
-import { simulateTransaction } from "./simulate.js";
+import { simulateTransaction, staticStakeholders } from "./simulate.js";
+import { computeHookStateCost } from "./hookstate.js";
 import { simDeps } from "./simdeps.js";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -244,6 +245,42 @@ server.registerTool("encode_hook_on", {
   outputSchema: ENCODE_HOOKON_OUT,
 }, async ({ txTypes }) => {
   try { const e = encodeHookOn(txTypes); return ok(`HookOn ${e.hookOn} fires on: ${e.firesOn.join(", ")}`, e); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("decode_hook_can_emit", {
+  description: "Decode a HookCanEmit 256-bit bitmap into the set of transaction types a hook is permitted to EMIT (HookCanEmit amendment). Same encoding as HookOn (inverted/active-low, active-high SetHook bit). NOTE: an ABSENT HookCanEmit field means the hook may emit ANY transaction (including SetHook) — this tool only decodes a present value. Offline.",
+  inputSchema: { hookCanEmit: z.string().describe("HookCanEmit hex (up to 64 chars)") },
+}, async ({ hookCanEmit }) => {
+  try { const d = decodeHookOn(hookCanEmit); return ok(`May emit ${d.count} type(s): ${d.firesOn.join(", ") || "(none)"}`, { canEmit: d.firesOn, count: d.count, hookCanEmit: d.hookOn, note: "Absent HookCanEmit = may emit any transaction type." }); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("encode_hook_can_emit", {
+  description: "Build a canonical HookCanEmit hex from the list of transaction types a hook should be allowed to emit (HookCanEmit amendment; same encoding as HookOn). Omit the field entirely on the SetHook to allow emitting anything. Offline.",
+  inputSchema: { txTypes: z.array(z.string()).min(1).describe("e.g. [\"Payment\",\"Remit\"]") },
+}, async ({ txTypes }) => {
+  try { const e = encodeHookOn(txTypes); return ok(`HookCanEmit ${e.hookOn} allows emitting: ${e.firesOn.join(", ")}`, { hookCanEmit: e.hookOn, canEmit: e.firesOn }); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("estimate_hook_state_cost", {
+  description: "Compute the owner-reserve cost of Hook State entries under ExtendedHookState. Given each entry's value size in bytes and the HookStateScale (1–16), returns per-entry capacity (256×scale bytes), per-entry reserve units (= scale, charged even for 1 byte), total reserve units, overflow warnings, and the minimum scale needed. Reserve UNITS are exact; pass ownerReserveIncrementXah to also get an XAH figure. Offline.",
+  inputSchema: {
+    entries: z.array(z.object({ label: z.string().optional(), valueBytes: z.number().int().nonnegative() })).min(1),
+    scale: z.number().int().min(1).max(16).default(1),
+    ownerReserveIncrementXah: z.number().optional().describe("optional: your network's owner-reserve increment in XAH, to convert units → XAH"),
+  },
+}, async (a) => {
+  try { const r = computeHookStateCost(a as any); return ok(r.summary as string, r); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("simulate_hook_trigger", {
+  description: "Statically predict which accounts' hooks a transaction WOULD invoke (transactional stakeholders), with strong (can rollback) vs weak (runs, can't rollback) roles — from the tx fields alone, no bytecode run and no ledger read. For tx types whose stakeholders require ledger-object lookups it returns a `partial` flag rather than guessing. For a full prediction that runs the real hook bytecode against live state, use simulate_transaction. Offline.",
+  inputSchema: { tx: z.record(z.string(), z.unknown()).describe("transaction JSON (needs at least TransactionType + Account)") },
+}, async ({ tx }) => {
+  try { const r = staticStakeholders(tx as Record<string, unknown>); return ok(r.summary, r as Record<string, unknown>); }
   catch (e) { return fail((e as Error).message); }
 });
 

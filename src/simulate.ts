@@ -29,7 +29,7 @@ import { predictTransactor, TRANSACTOR_SUPPORTED, type TransactorPrediction } fr
 
 /** applyHook.cpp getTransactionalStakeHolders — the statically-derivable rows.
  *  field: top-level tx field holding an account; strong: can rollback. */
-const TSH_TABLE: Record<string, { field: string; strong: boolean }[]> = {
+export const TSH_TABLE: Record<string, { field: string; strong: boolean }[]> = {
   Payment: [{ field: "Destination", strong: true }],
   Invoke: [{ field: "Destination", strong: true }],
   EscrowCreate: [{ field: "Destination", strong: true }],
@@ -48,7 +48,44 @@ const TSH_TABLE: Record<string, { field: string; strong: boolean }[]> = {
   AccountSet: [], OfferCancel: [], TicketCreate: [], SetHook: [], OfferCreate: [],
 };
 // stakeholders that would need ledger-object lookups we don't perform — flagged, not guessed
-const TSH_PARTIAL = new Set(["EscrowFinish", "EscrowCancel", "CheckCash", "CheckCancel", "PaymentChannelFund", "PaymentChannelClaim", "URITokenBuy", "URITokenBurn", "URITokenCancelSellOffer", "NFTokenAcceptOffer", "NFTokenCancelOffer", "NFTokenBurn", "NFTokenCreateOffer"]);
+export const TSH_PARTIAL = new Set(["EscrowFinish", "EscrowCancel", "CheckCash", "CheckCancel", "PaymentChannelFund", "PaymentChannelClaim", "URITokenBuy", "URITokenBurn", "URITokenCancelSellOffer", "NFTokenAcceptOffer", "NFTokenCancelOffer", "NFTokenBurn", "NFTokenCreateOffer"]);
+
+/** Static, no-RPC, no-bytecode prediction of which accounts' hooks a transaction WOULD invoke,
+ *  with strong/weak (rollback-capable) roles. Derived from the statically-known TSH table; for tx
+ *  types whose stakeholders need ledger-object lookups, returns a `partial` flag instead of guessing.
+ *  (For a full prediction that runs the real hook bytecode, use simulate_transaction.) */
+export function staticStakeholders(tx: Record<string, unknown>) {
+  const txType = tx.TransactionType as string | undefined;
+  const sender = tx.Account as string | undefined;
+  const stakeholders: { account: string; role: string; strong: boolean }[] = [];
+  if (sender) stakeholders.push({ account: sender, role: "originator", strong: true });
+  let partial = false;
+  const notes: string[] = [];
+  if (!txType) {
+    notes.push("tx has no TransactionType — only the originator could be determined");
+  } else if (TSH_TABLE[txType]) {
+    for (const r of TSH_TABLE[txType]) {
+      const v = tx[r.field];
+      if (typeof v === "string" && v !== sender) stakeholders.push({ account: v, role: `TSH:${r.field}`, strong: r.strong });
+    }
+  } else if (TSH_PARTIAL.has(txType)) {
+    partial = true;
+    notes.push(`${txType}: additional stakeholders come from ledger objects (escrow/check/offer owners) not derivable statically — incomplete without a ledger read`);
+  } else {
+    notes.push(`${txType}: no TSH-table entry — only the originator's hooks would fire`);
+  }
+  return {
+    transactionType: txType ?? null,
+    stakeholderCount: stakeholders.length,
+    stakeholders,
+    partial,
+    strongCount: stakeholders.filter((s) => s.strong).length,
+    weakCount: stakeholders.filter((s) => !s.strong).length,
+    notes,
+    summary: `${stakeholders.length} account(s) whose hooks would fire for ${txType ?? "(unknown)"}${partial ? " (partial — see notes)" : ""}`,
+    caveat: "Static prediction from tx fields only — no bytecode run, no ledger read. strong = the hook can rollback the transaction; weak = it runs but cannot rollback. Use simulate_transaction to actually execute the hooks.",
+  };
+}
 
 export interface SimDeps {
   /** account_objects(type:hook) -> the Hook ledger object's Hooks array (wrappers ok), or [] */
