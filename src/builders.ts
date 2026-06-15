@@ -212,3 +212,134 @@ export function buildRemitUnsigned(input: {
     preflightFindings: findings,
   };
 }
+
+// ---- shared blob helper: pass even-length hex through; otherwise UTF-8 encode ----
+function textOrHexToBlob(s: string): { hex: string; encoded: boolean } {
+  const h = HEX(s);
+  if (h.length > 0 && /^[0-9A-F]+$/.test(h) && h.length % 2 === 0) return { hex: h, encoded: false };
+  return { hex: Buffer.from(s, "utf8").toString("hex").toUpperCase(), encoded: true };
+}
+
+// ---- SetRemarks (Remarks amendment): attach/update/delete key-value remarks on a ledger object ----
+// Canonical per Xahau-Docs setremarks.md: Remarks = [{ Remark: { RemarkName, RemarkValue?, Flags? } }].
+// Omit RemarkValue to DELETE a remark. Flags:1 = tfImmutable (permanent). Max 32, names unique, 1–256 bytes.
+// You must be the object's owner (or, for URITokens/trustlines, its issuer). Cost +1 drop per remark byte.
+export function buildSetRemarksUnsigned(input: {
+  account: string;
+  objectId: string;
+  remarks: { name: string; value?: string; immutable?: boolean }[];
+  network?: Network;
+}): BuildResult {
+  const network = input.network ?? "testnet";
+  if (!validateAddress(input.account).valid) throw new Error("account is not a valid r-address / X-address");
+  const oid = HEX(input.objectId);
+  if (!/^[0-9A-F]{64}$/.test(oid)) throw new Error("objectId must be a 64-char hex (256-bit) ledger object ID");
+  if (!input.remarks?.length) throw new Error("provide at least one remark");
+  if (input.remarks.length > 32) throw new Error("a maximum of 32 remarks per object");
+
+  const findings: Finding[] = [];
+  const seen = new Set<string>();
+  const Remarks = input.remarks.map((r, i) => {
+    if (!r.name) throw new Error(`remarks[${i}]: name is required`);
+    const name = textOrHexToBlob(r.name);
+    if (name.hex.length / 2 < 1 || name.hex.length / 2 > 256) throw new Error(`remarks[${i}]: RemarkName must be 1–256 bytes`);
+    if (seen.has(name.hex)) throw new Error(`remarks[${i}]: duplicate RemarkName (must be unique per object)`);
+    seen.add(name.hex);
+    const Remark: Record<string, unknown> = { RemarkName: name.hex };
+    if (r.value !== undefined && r.value !== "") {
+      const val = textOrHexToBlob(r.value);
+      if (val.hex.length / 2 < 1 || val.hex.length / 2 > 256) throw new Error(`remarks[${i}]: RemarkValue must be 1–256 bytes`);
+      Remark.RemarkValue = val.hex;
+    } else {
+      findings.push({ ruleId: "REMARK-DELETE", severity: "MEDIUM", message: `remarks[${i}] "${r.name}" has no value → this DELETES that remark from the object.` });
+    }
+    if (r.immutable) {
+      Remark.Flags = 1; // tfImmutable
+      findings.push({ ruleId: "REMARK-IMMUTABLE", severity: "MEDIUM", message: `remarks[${i}] "${r.name}" is marked IMMUTABLE — it can never be changed or deleted afterwards.` });
+    }
+    return { Remark };
+  });
+  findings.push({ ruleId: "TX-001-NO-LASTLEDGERSEQ", severity: "LOW", message: "Add a LastLedgerSequence before signing so the tx cannot be replayed indefinitely." });
+
+  return {
+    unsignedTx: { TransactionType: "SetRemarks", ...base(input.account, network), ObjectID: oid, Remarks },
+    network,
+    signingInstructions: SIGNING_INSTRUCTIONS + " SetRemarks: you must be the owner of ObjectID (or its issuer for URITokens/trustlines). Cost is +1 drop per byte of all RemarkName/RemarkValue. Immutable remarks (Flags:1) are permanent. RemarkName/RemarkValue are hex; non-hex text is UTF-8 encoded.",
+    preflightFindings: findings,
+  };
+}
+
+// ---- Clawback (ported from XRPL): an issuer revokes previously-issued tokens from a holder ----
+// Canonical XRPL/Xahau shape: Account = the ISSUER; Amount.issuer = the HOLDER being clawed from
+// (counter-intuitive but correct). Requires the issuer to have set asfAllowTrustLineClawback. Cannot claw native XAH.
+export function buildClawbackUnsigned(input: {
+  account: string;
+  holder: string;
+  currency: string;
+  value: string;
+  network?: Network;
+}): BuildResult {
+  const network = input.network ?? "testnet";
+  if (!validateAddress(input.account).valid) throw new Error("account (issuer) is not a valid r-address / X-address");
+  if (!validateAddress(input.holder).valid) throw new Error("holder is not a valid r-address / X-address");
+  if (input.account.trim() === input.holder.trim()) throw new Error("holder must differ from the issuer account");
+  if (input.value === undefined || Number.isNaN(Number(input.value)) || Number(input.value) <= 0) throw new Error("value must be a positive amount to claw back");
+  const cc = currencyCode(input.currency);
+  const code = cc.standard && cc.code ? cc.code : cc.hex;
+  if (code === "XAH") throw new Error("cannot claw back native XAH — Clawback applies to issued tokens only");
+
+  const Amount = { currency: code, issuer: input.holder.trim(), value: String(input.value) };
+  const findings: Finding[] = [
+    { ruleId: "CLAWBACK-ISSUER-IS-HOLDER", severity: "INFO", message: "Amount.issuer is the HOLDER being clawed from (not you). The transaction Account is the token issuer." },
+    { ruleId: "CLAWBACK-REQUIRES-OPT-IN", severity: "MEDIUM", message: "Clawback only works if the issuer account previously enabled it (AccountSet asfAllowTrustLineClawback / lsfAllowTrustLineClawback). It cannot be enabled after tokens are issued without clawback set first." },
+    { ruleId: "TX-001-NO-LASTLEDGERSEQ", severity: "LOW", message: "Add a LastLedgerSequence before signing so the tx cannot be replayed indefinitely." },
+  ];
+  return {
+    unsignedTx: { TransactionType: "Clawback", ...base(input.account, network), Amount },
+    network,
+    signingInstructions: SIGNING_INSTRUCTIONS + " Clawback: Account must be the token issuer with clawback enabled. Amount.issuer is the holder being clawed from.",
+    preflightFindings: findings,
+  };
+}
+
+// ---- DeepFreeze / Freeze: a TrustSet that toggles a freeze flag on the issuer's trustline to a holder ----
+// DeepFreeze (ported from XRPL) blocks the holder from BOTH sending and receiving the token; a normal freeze
+// only blocks sending. Implemented as TrustSet flags (tfSetDeepFreeze etc.) — there is no separate tx type.
+const FREEZE_FLAGS: Record<string, number> = {
+  freeze: 1048576,            // tfSetFreeze
+  unfreeze: 2097152,          // tfClearFreeze
+  deep_freeze: 4194304,       // tfSetDeepFreeze
+  clear_deep_freeze: 8388608, // tfClearDeepFreeze
+};
+export function buildDeepFreezeUnsigned(input: {
+  account: string;
+  counterparty: string;
+  currency: string;
+  action?: "deep_freeze" | "clear_deep_freeze" | "freeze" | "unfreeze";
+  limitValue?: string;
+  network?: Network;
+}): BuildResult {
+  const network = input.network ?? "testnet";
+  const action = input.action ?? "deep_freeze";
+  const flag = FREEZE_FLAGS[action];
+  if (flag === undefined) throw new Error(`action must be one of: ${Object.keys(FREEZE_FLAGS).join(", ")}`);
+  if (!validateAddress(input.account).valid) throw new Error("account (issuer) is not a valid r-address / X-address");
+  if (!validateAddress(input.counterparty).valid) throw new Error("counterparty (holder) is not a valid r-address / X-address");
+  if (input.account.trim() === input.counterparty.trim()) throw new Error("counterparty must differ from the issuer account");
+  const cc = currencyCode(input.currency);
+  const code = cc.standard && cc.code ? cc.code : cc.hex;
+  if (code === "XAH") throw new Error("native XAH has no trustline to freeze — use an issued currency");
+
+  const LimitAmount = { currency: code, issuer: input.counterparty.trim(), value: input.limitValue ?? "0" };
+  const findings: Finding[] = [];
+  if (action === "deep_freeze") findings.push({ ruleId: "DEEPFREEZE-EFFECT", severity: "MEDIUM", message: "Deep freeze blocks the holder from BOTH sending and receiving this token (a normal freeze only blocks sending). The trustline must already exist." });
+  findings.push({ ruleId: "TRUSTSET-LIMIT", severity: "INFO", message: 'LimitAmount.value defaults to "0"; set limitValue to your existing trust limit to this counterparty if you have one, so this TrustSet does not also change the limit.' });
+  findings.push({ ruleId: "TX-001-NO-LASTLEDGERSEQ", severity: "LOW", message: "Add a LastLedgerSequence before signing so the tx cannot be replayed indefinitely." });
+
+  return {
+    unsignedTx: { TransactionType: "TrustSet", ...base(input.account, network), LimitAmount, Flags: flag },
+    network,
+    signingInstructions: SIGNING_INSTRUCTIONS + " This TrustSet toggles a freeze flag on your trustline to the counterparty. Deep freeze (tfSetDeepFreeze) requires the DeepFreeze amendment to be enabled.",
+    preflightFindings: findings,
+  };
+}
