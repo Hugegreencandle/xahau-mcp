@@ -30,6 +30,7 @@ import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { getAmendmentStatus, predictAmendmentActivation, diffNodeAmendments, checkAmendmentBlocked } from "./amendments.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned, buildRemitUnsigned, buildSetRemarksUnsigned, buildClawbackUnsigned, buildDeepFreezeUnsigned } from "./builders.js";
+import { buildCronSet, listCronJobs, monitorCronHealth } from "./cron.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
@@ -971,6 +972,43 @@ server.registerTool("build_deepfreeze_unsigned", {
   },
 }, async (a) => {
   try { const r = buildDeepFreezeUnsigned(a as any); return ok(`unsigned TrustSet ${a.action ?? "deep_freeze"} ${a.currency} ↔ ${a.counterparty} (${r.network})`, r as any); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+/* ===================== Tier G — Cron (scheduled Hook execution) ===================== */
+
+server.registerTool("build_cronset_unsigned", {
+  description: "Assemble an UNSIGNED CronSet — schedule a Hook's future self-invocations (Cron amendment). StartTime is Ripple-epoch seconds (0/omitted = ASAP); use startInSeconds for now+N. RepeatCount 0–256 (omit for a one-off), DelaySeconds = interval between repeats. Set cancel:true for tfCronUnset to remove the Cron. The account must have a Hook installed to act on the Cron pseudo-transaction. Returns unsigned JSON + preflight. Never signs; testnet by default.",
+  inputSchema: {
+    account: z.string().min(25),
+    startTime: z.number().optional().describe("Ripple-epoch seconds; 0 = ASAP"),
+    startInSeconds: z.number().optional().describe("convenience: schedule for now + N seconds"),
+    delaySeconds: z.number().optional().describe("seconds between repeats"),
+    repeatCount: z.number().optional().describe("0–256 total repeats; omit for one-off"),
+    cancel: z.boolean().optional().describe("tfCronUnset — remove the account's Cron"),
+    network: NET.default("testnet"),
+  },
+}, async (a) => {
+  try {
+    const r = buildCronSet(a as any);
+    const what = a.cancel ? "cancel Cron" : (a.repeatCount ? `${a.repeatCount}× every ${a.delaySeconds ?? "?"}s` : "one-off");
+    return ok(`unsigned CronSet (${what}) for ${a.account} (${r.network})`, r as any);
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("list_cron_jobs", {
+  description: "List an account's Cron ledger objects — scheduled Hook self-invocations — with decoded StartTime (ISO), DelaySeconds, remaining RepeatCount and an estimated next-fire time. Raw ledger object included per entry. 1 RPC read.",
+  inputSchema: { account: z.string().min(25), network: NET },
+}, async ({ account, network }) => {
+  try { const r = await listCronJobs(account, network as Net); return ok(r.summary, r as Record<string, unknown>); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("monitor_cron_health", {
+  description: "Check an account's Crons for ones nearing exhaustion — remaining RepeatCount at or below a threshold (default 8) — so a recurring governance/game Hook doesn't silently stop. Returns alerts + a healthy flag. 1 RPC read.",
+  inputSchema: { account: z.string().min(25), lowThreshold: z.number().default(8).describe("warn when remaining repeats ≤ this"), network: NET },
+}, async ({ account, lowThreshold, network }) => {
+  try { const r = await monitorCronHealth(account, network as Net, lowThreshold); return ok(r.summary, r as Record<string, unknown>); }
   catch (e) { return fail((e as Error).message); }
 });
 
