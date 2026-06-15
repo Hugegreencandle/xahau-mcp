@@ -143,6 +143,13 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 | `check_amendment_blocked` | Is the configured node **amendment blocked** (xahaud too old to read an enabled amendment)? Build version, validated ledger, upgrade remedy. |
 | `diff_node_amendments` | Diff enabled-amendment sets across two networks (e.g. mainnet vs testnet) — explains why a tx/Hook feature works on one but not the other. |
 
+**Audit / forensics**
+| Tool | Purpose |
+|---|---|
+| `trace_transaction_stakeholders` | Every account a tx touched, from metadata. The **Touch** amendment forces all stakeholders into metadata, so this is the authoritative participant list (roles + entry types + materially-changed flag). |
+| `verify_double_threading` | Structural audit of a tx's metadata threading; flags the duplicate-node symptom `fixProvisionalDoubleThreading` addressed. |
+| `audit_account_remarks` | Decode the **Remarks** attached to an account's objects (name/value hex→text, immutable flag) — dynamic-NFT and annotation patterns. |
+
 **Unsigned builders (no keys, testnet-default)**
 | Tool | Purpose |
 |---|---|
