@@ -55,14 +55,14 @@ describe("summarizeCron", () => {
     expect(s.owner).toBe(ACCT);
     expect(s.repeatCount).toBe(3);
     expect(s.startTimeIso).toBe(new Date((startTime + RIPPLE_EPOCH) * 1000).toISOString());
-    expect(s.nextFireIso).toBe(new Date((startTime + RIPPLE_EPOCH) * 1000).toISOString());
+    expect(s.earliestFireIso).toBe(new Date((startTime + RIPPLE_EPOCH) * 1000).toISOString());
     expect(s.raw).toBe(obj);
   });
 
   it("handles missing fields gracefully", () => {
     const s = summarizeCron({ LedgerEntryType: "Cron" }, 0);
     expect(s.startTime).toBeNull();
-    expect(s.nextFireIso).toBeNull();
+    expect(s.earliestFireIso).toBeNull();
     expect(s.repeatCount).toBeNull();
   });
 });

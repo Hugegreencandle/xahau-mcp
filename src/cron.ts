@@ -97,7 +97,10 @@ export interface CronSummary {
   startTimeIso: string | null;
   delaySeconds: number | null;
   repeatCount: number | null;
-  nextFireIso: string | null;
+  /** EARLIEST possible fire time = max(StartTime, now). This is a lower bound only: it ignores
+   *  DelaySeconds and how many of RepeatCount have already elapsed, so a recurring Cron's actual
+   *  next fire can be later. Not a precise next-fire prediction. */
+  earliestFireIso: string | null;
   raw: Record<string, unknown>;
 }
 
@@ -111,7 +114,8 @@ export function summarizeCron(obj: Record<string, unknown>, nowUnix: number): Cr
     startTimeIso: rippleToIso(startTime ?? undefined),
     delaySeconds: typeof obj.DelaySeconds === "number" ? (obj.DelaySeconds as number) : null,
     repeatCount: typeof obj.RepeatCount === "number" ? (obj.RepeatCount as number) : null,
-    nextFireIso: startUnix !== null ? new Date(Math.max(startUnix, nowUnix) * 1000).toISOString() : null,
+    // EARLIEST possible fire: lower bound only — ignores DelaySeconds and elapsed repeats.
+    earliestFireIso: startUnix !== null ? new Date(Math.max(startUnix, nowUnix) * 1000).toISOString() : null,
     raw: obj,
   };
 }
