@@ -142,6 +142,13 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 | `build_claimreward_unsigned` · `build_import_unsigned` · `build_payment_unsigned` | UNSIGNED ClaimReward · Import/B2M · Payment. |
 | `prepare_transaction` | Autofill Sequence/Fee/LastLedgerSequence/NetworkID from the live network → ready to sign offline (never signs). |
 
+**Cron (scheduled Hook execution)**
+| Tool | Purpose |
+|---|---|
+| `build_cronset_unsigned` | UNSIGNED **CronSet** — schedule a Hook's future self-invocations: `StartTime` (Ripple-epoch, 0=ASAP) or `startInSeconds`, `RepeatCount` (0–256), `DelaySeconds`, or `cancel` (tfCronUnset). Preflight catches recurring-without-interval and no-Hook cases. |
+| `list_cron_jobs` | Read an account's Cron ledger objects with decoded StartTime (ISO), DelaySeconds, remaining RepeatCount, and an estimated next-fire time (raw object included). |
+| `monitor_cron_health` | Flag Crons whose remaining repeats are near exhaustion (≤ threshold) so a recurring governance/game Hook doesn't silently stop. |
+
 ## Install
 
 > New here or non-technical? Start with the **[plain-English tutorial](docs/TUTORIAL.md)** — what it does + cool things to just *ask*.
