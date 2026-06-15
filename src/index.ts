@@ -28,7 +28,7 @@ import { scaffoldHook } from "./scaffold.js";
 import { computeReward } from "./rewards.js";
 import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
-import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned } from "./builders.js";
+import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned, buildRemitUnsigned } from "./builders.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
@@ -859,6 +859,35 @@ server.registerTool("build_payment_unsigned", {
   description: "Assemble an UNSIGNED XAH Payment (amount in drops). Returns unsigned JSON + offline signing instructions + payload preflight. Never signs; testnet by default.",
   inputSchema: { account: z.string().min(25), destination: z.string().min(25), amountDrops: z.string().describe("native amount in DROPS (1 XAH = 1,000,000 drops); use xah_amount to convert XAH→drops"), destinationTag: z.number().optional(), network: NET.default("testnet") },
 }, async (a) => { try { const r = buildPaymentUnsigned(a as any); return ok(`unsigned Payment ${a.amountDrops} drops → ${a.destination} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("build_remit_unsigned", {
+  description: "Assemble an UNSIGNED Remit (XLS-55) — Xahau's atomic multi-asset push payment. Send multiple currencies (native + issued) and/or transfer existing URITokens and/or mint a new URIToken to one Destination in a single all-or-nothing transaction. The transactor auto-creates missing trustlines, pays token reserves, and creates the destination account if absent (no partial payments, no pathing). Optionally Inform a third-party hook. Returns unsigned JSON + payload preflight + offline signing instructions. Never signs; testnet by default.",
+  inputSchema: {
+    account: z.string().min(25),
+    destination: z.string().min(25),
+    amounts: z.array(z.union([
+      z.string().describe("native XAH amount in DROPS (integer string)"),
+      z.object({ currency: z.string().describe("3-char ISO code or 40-hex currency"), issuer: z.string().min(25), value: z.string() }),
+    ])).optional().describe("currencies to send; each becomes an AmountEntry"),
+    uriTokenIds: z.array(z.string()).optional().describe("existing URIToken IDs (64-hex) to transfer to destination"),
+    mintURIToken: z.object({ uri: z.string().describe("hex, or text (auto UTF-8→hex)"), digest: z.string().optional().describe("64-hex digest"), flags: z.number().optional() }).optional().describe("mint a new URIToken to the destination (e.g. a receipt)"),
+    inform: z.string().optional().describe("third-party account to notify (weak TSH; its hook runs)"),
+    blob: z.string().optional().describe("arbitrary hex payload"),
+    invoiceId: z.string().optional().describe("64-hex InvoiceID"),
+    destinationTag: z.number().optional(),
+    network: NET.default("testnet"),
+  },
+}, async (a) => {
+  try {
+    const r = buildRemitUnsigned(a as any);
+    const parts = [
+      a.amounts?.length ? `${a.amounts.length} amount(s)` : null,
+      a.uriTokenIds?.length ? `${a.uriTokenIds.length} URIToken(s)` : null,
+      a.mintURIToken ? "mint URIToken" : null,
+    ].filter(Boolean).join(" + ") || "no payload";
+    return ok(`unsigned Remit (${parts}) → ${a.destination} (${r.network})`, r as any);
+  } catch (e) { return fail((e as Error).message); }
+});
 
 server.registerTool("prepare_transaction", {
   description: "Autofill an unsigned transaction with live network values — Sequence (from the account), Fee (current base fee), LastLedgerSequence (now + offset), and NetworkID — so it's ready to sign OFFLINE. Read-only: fetches values, fills the tx, but NEVER signs or submits. Defaults to TESTNET — pass network:'mainnet' for a mainnet account (else you get a mainnet account's testnet Sequence/NetworkID or actNotFound).",
