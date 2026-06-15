@@ -118,3 +118,21 @@ export const SIMULATE_OUT = {
   notes: arr, caveat: str,
   baseTxHash: str, overriddenFields: arr, ...err,
 };
+
+// ---- audit / forensics tools (src/audit.ts) ----
+export const TRACE_STAKEHOLDERS_OUT = {
+  network: str, txHash: str, originator: z.string().nullable().optional(),
+  stakeholderCount: num, stakeholders: arr, summary: str, metaPresent: bool, note: str, ...err,
+};
+
+export const DOUBLE_THREADING_OUT = {
+  network: str, txHash: z.string().nullable().optional(),
+  affectedNodeCount: num, uniqueLedgerObjects: num, entries: arr, anomalies: arr,
+  consistent: bool, summary: str, caveat: str, ...err,
+};
+
+export const ACCOUNT_REMARKS_OUT = {
+  account: str, network: str, objectsScanned: num, pagesFetched: num, truncated: bool,
+  objectsWithRemarks: num, remarkCount: num, immutableCount: num, objects: arr,
+  summary: str, note: str, ...err,
+};

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractStakeholders, auditThreading, decodeRemarksOnObjects } from "../src/audit.js";
+import { extractStakeholders, auditThreading, decodeRemarksOnObjects, auditAccountRemarks } from "../src/audit.js";
 
 const A = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh";
 const B = "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe";
@@ -91,5 +91,41 @@ describe("decodeRemarksOnObjects", () => {
     const r = decodeRemarksOnObjects([{ LedgerEntryType: "AccountRoot" }]);
     expect(r.objectsWithRemarks).toBe(0);
     expect(r.remarkCount).toBe(0);
+  });
+});
+
+describe("auditAccountRemarks — account_objects marker paging", () => {
+  const remark = (name: string) => ({
+    LedgerEntryType: "URIToken", index: name,
+    Remarks: [{ Remark: { RemarkName: Buffer.from(name, "utf8").toString("hex").toUpperCase() } }],
+  });
+
+  it("follows the marker across pages so later-page remarks aren't dropped", async () => {
+    // page 1 returns a marker; page 2 has no marker (end). A remark lives on each page.
+    const pages = [
+      { account_objects: [remark("p1")], marker: "MARKER_1" },
+      { account_objects: [remark("p2")] },
+    ];
+    let calls = 0;
+    const pager = async (_a: string, _n: any, m: unknown) => {
+      // first call has no marker, second call must echo the page-1 marker
+      if (calls === 0) expect(m).toBeUndefined(); else expect(m).toBe("MARKER_1");
+      return pages[calls++];
+    };
+    const r = await auditAccountRemarks("rTest", "mainnet", pager as any);
+    expect(calls).toBe(2);
+    expect(r.pagesFetched).toBe(2);
+    expect(r.truncated).toBe(false);
+    expect(r.objectsScanned).toBe(2);
+    expect(r.remarkCount).toBe(2); // both pages counted
+  });
+
+  it("does a single read when there is no marker", async () => {
+    let calls = 0;
+    const pager = async () => { calls++; return { account_objects: [remark("only")] }; };
+    const r = await auditAccountRemarks("rTest", "mainnet", pager as any);
+    expect(calls).toBe(1);
+    expect(r.pagesFetched).toBe(1);
+    expect(r.remarkCount).toBe(1);
   });
 });

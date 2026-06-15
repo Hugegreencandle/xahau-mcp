@@ -32,7 +32,7 @@ import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, b
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
-import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT } from "./outputSchemas.js";
+import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT, TRACE_STAKEHOLDERS_OUT, DOUBLE_THREADING_OUT, ACCOUNT_REMARKS_OUT } from "./outputSchemas.js";
 import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { diagnoseFailedTx } from "./diagnose.js";
@@ -770,6 +770,7 @@ server.registerTool("diagnose_failed_tx", {
 server.registerTool("trace_transaction_stakeholders", {
   description: "Every account a transaction touched, from its metadata (AffectedNodes). Because the Touch amendment forces all transactional stakeholders into metadata — even ones nothing else changed for — this is the authoritative participant list, not a guess from tx fields. Returns each account with its roles, the ledger entry types it appeared in, and whether it materially changed. 1 RPC read.",
   inputSchema: { txHash: z.string().length(64), network: NET },
+  outputSchema: TRACE_STAKEHOLDERS_OUT,
 }, async ({ txHash, network }) => {
   try { const r = await traceTransactionStakeholders(txHash, network as Net); return ok(`${r.stakeholderCount} stakeholder(s) in ${txHash.slice(0, 12)}…`, r as Record<string, unknown>); }
   catch (e) { return fail((e as Error).message); }
@@ -778,14 +779,16 @@ server.registerTool("trace_transaction_stakeholders", {
 server.registerTool("verify_double_threading", {
   description: "Structural audit of a transaction's metadata threading — lists each affected ledger object's PreviousTxnID / PreviousTxnLgrSeq and flags the duplicate-node symptom that fixProvisionalDoubleThreading addressed (a single ledger object touched by more than one AffectedNodes entry). Metadata-only check; does not walk the full cross-ledger thread. 1 RPC read.",
   inputSchema: { txHash: z.string().length(64), network: NET },
+  outputSchema: DOUBLE_THREADING_OUT,
 }, async ({ txHash, network }) => {
   try { const r = await verifyDoubleThreading(txHash, network as Net); return ok(r.summary, r as Record<string, unknown>); }
   catch (e) { return fail((e as Error).message); }
 });
 
 server.registerTool("audit_account_remarks", {
-  description: "Read the Remarks (Remarks amendment) attached to an account's owned ledger objects — decoded name/value (hex→text where printable) with the immutable flag surfaced. Useful for dynamic-NFT patterns and object annotations. 1 RPC read.",
+  description: "Read the Remarks (Remarks amendment) attached to an account's owned ledger objects — decoded name/value (hex→text where printable) with the immutable flag surfaced. Useful for dynamic-NFT patterns and object annotations. Follows the account_objects `marker` so accounts with many objects don't drop remarks on later pages (capped at 20 pages — `truncated:true` if hit); 1+ RPC reads.",
   inputSchema: { account: z.string().min(25), network: NET },
+  outputSchema: ACCOUNT_REMARKS_OUT,
 }, async ({ account, network }) => {
   try { const r = await auditAccountRemarks(account, network as Net); return ok(r.summary, r as Record<string, unknown>); }
   catch (e) { return fail((e as Error).message); }

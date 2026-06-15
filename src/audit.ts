@@ -10,7 +10,7 @@
 //      decode names/values, flag immutable ones.
 //
 // All read-only.
-import { getTx, getAccountObjects, type Network } from "./rpc.js";
+import { getTx, type Network, rpc } from "./rpc.js";
 
 const TF_IMMUTABLE = 1;
 
@@ -173,15 +173,50 @@ export async function verifyDoubleThreading(txHash: string, network: Network) {
   return { network, ...auditThreading(tx as Record<string, unknown>) };
 }
 
-export async function auditAccountRemarks(account: string, network: Network) {
-  const r = await getAccountObjects(account, network);
-  const objs = (r.account_objects ?? []) as Record<string, unknown>[];
+// Accounts can own more than one page of objects; account_objects returns a `marker` to continue.
+// We follow the marker so remarks on later pages aren't silently dropped. Bounded by MAX_PAGES so a
+// pathological account can't drive unbounded RPC; if hit, `truncated` is surfaced honestly.
+const REMARKS_MAX_PAGES = 20;
+
+type ObjectsPage = { account_objects?: Record<string, unknown>[]; marker?: unknown };
+/** Fetches one account_objects page (overridable in tests). */
+export type AccountObjectsPager = (account: string, network: Network, marker: unknown) => Promise<ObjectsPage>;
+
+const defaultPager: AccountObjectsPager = (account, network, marker) =>
+  rpc<ObjectsPage>(
+    "account_objects",
+    { account, ledger_index: "validated", limit: 400, ...(marker !== undefined ? { marker } : {}) },
+    network,
+  );
+
+/** Collect every owned object across all account_objects pages, following `marker`. Bounded by
+ *  REMARKS_MAX_PAGES so a pathological account can't drive unbounded RPC. */
+export async function collectAllAccountObjects(account: string, network: Network, pager: AccountObjectsPager = defaultPager) {
+  const objs: Record<string, unknown>[] = [];
+  let marker: unknown = undefined;
+  let pages = 0;
+  let truncated = false;
+  do {
+    const r = await pager(account, network, marker);
+    objs.push(...((r.account_objects ?? []) as Record<string, unknown>[]));
+    marker = r.marker;
+    pages++;
+    if (marker !== undefined && pages >= REMARKS_MAX_PAGES) { truncated = true; break; }
+  } while (marker !== undefined);
+  return { objs, pages, truncated };
+}
+
+export async function auditAccountRemarks(account: string, network: Network, pager: AccountObjectsPager = defaultPager) {
+  const { objs, pages, truncated } = await collectAllAccountObjects(account, network, pager);
+
   const decoded = decodeRemarksOnObjects(objs);
   return {
     account, network,
     objectsScanned: objs.length,
+    pagesFetched: pages,
+    truncated,
     ...decoded,
-    summary: `${decoded.remarkCount} remark(s) across ${decoded.objectsWithRemarks} object(s) on ${account}; ${decoded.immutableCount} immutable`,
-    note: "Remarks are read from each owned ledger object's Remarks field (Remarks amendment).",
+    summary: `${decoded.remarkCount} remark(s) across ${decoded.objectsWithRemarks} object(s) on ${account}; ${decoded.immutableCount} immutable${truncated ? ` (TRUNCATED at ${REMARKS_MAX_PAGES} pages — more objects exist)` : ""}`,
+    note: `Remarks are read from each owned ledger object's Remarks field (Remarks amendment). All object pages are followed via account_objects marker${truncated ? `, capped at ${REMARKS_MAX_PAGES} pages` : ""}.`,
   };
 }
