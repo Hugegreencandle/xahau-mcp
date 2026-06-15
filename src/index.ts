@@ -29,7 +29,7 @@ import { computeReward } from "./rewards.js";
 import { quantumGrade } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { getAmendmentStatus, predictAmendmentActivation, diffNodeAmendments, checkAmendmentBlocked } from "./amendments.js";
-import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned, buildRemitUnsigned } from "./builders.js";
+import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned, buildRemitUnsigned, buildSetRemarksUnsigned, buildClawbackUnsigned, buildDeepFreezeUnsigned } from "./builders.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
@@ -926,6 +926,52 @@ server.registerTool("build_remit_unsigned", {
     ].filter(Boolean).join(" + ") || "no payload";
     return ok(`unsigned Remit (${parts}) → ${a.destination} (${r.network})`, r as any);
   } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("build_set_remarks_unsigned", {
+  description: "Assemble an UNSIGNED SetRemarks (Remarks amendment) — attach, update, or delete key-value remarks on a ledger object you own (or, for URITokens/trustlines, issue). Each remark: name (required), value (omit to DELETE), immutable (Flags:1 = permanent). Max 32 per object, names unique, 1–256 bytes each; cost +1 drop/byte. RemarkName/RemarkValue are hex (non-hex text is UTF-8 encoded). Powers dynamic NFTs and rich object annotations. Returns unsigned JSON + preflight. Never signs; testnet by default.",
+  inputSchema: {
+    account: z.string().min(25),
+    objectId: z.string().describe("64-hex ledger object ID to annotate (AccountRoot, URIToken, Offer, Escrow, trustline, …)"),
+    remarks: z.array(z.object({
+      name: z.string().describe("RemarkName (hex or text)"),
+      value: z.string().optional().describe("RemarkValue (hex or text); omit to DELETE this remark"),
+      immutable: z.boolean().optional().describe("mark permanent (tfImmutable) — can never be changed/deleted"),
+    })).min(1).max(32),
+    network: NET.default("testnet"),
+  },
+}, async (a) => {
+  try { const r = buildSetRemarksUnsigned(a as any); return ok(`unsigned SetRemarks (${a.remarks.length} remark(s)) on ${a.objectId.slice(0, 12)}… (${r.network})`, r as any); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("build_clawback_unsigned", {
+  description: "Assemble an UNSIGNED Clawback — an issuer revokes previously-issued tokens from a holder (ported from XRPL). Account is the ISSUER; the holder is whom you claw from. NOTE: requires the issuer to have enabled clawback (AccountSet asfAllowTrustLineClawback) BEFORE issuing. Cannot claw native XAH. Returns unsigned JSON + preflight. Never signs; testnet by default.",
+  inputSchema: {
+    account: z.string().min(25).describe("the token issuer (you)"),
+    holder: z.string().min(25).describe("the account to claw tokens back from"),
+    currency: z.string().describe("3-char ISO code or 40-hex currency"),
+    value: z.string().describe("amount to claw back (positive)"),
+    network: NET.default("testnet"),
+  },
+}, async (a) => {
+  try { const r = buildClawbackUnsigned(a as any); return ok(`unsigned Clawback ${a.value} ${a.currency} from ${a.holder} (${r.network})`, r as any); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("build_deepfreeze_unsigned", {
+  description: "Assemble an UNSIGNED TrustSet that toggles a freeze on your trustline to a counterparty. action: deep_freeze (blocks holder sending AND receiving — needs DeepFreeze amendment), clear_deep_freeze, freeze (blocks sending only), unfreeze. Returns unsigned JSON + preflight. Never signs; testnet by default.",
+  inputSchema: {
+    account: z.string().min(25).describe("the issuer (you)"),
+    counterparty: z.string().min(25).describe("the holder side of the trustline"),
+    currency: z.string().describe("3-char ISO code or 40-hex currency (issued, not XAH)"),
+    action: z.enum(["deep_freeze", "clear_deep_freeze", "freeze", "unfreeze"]).default("deep_freeze"),
+    limitValue: z.string().optional().describe("your existing trust limit to preserve (defaults to \"0\")"),
+    network: NET.default("testnet"),
+  },
+}, async (a) => {
+  try { const r = buildDeepFreezeUnsigned(a as any); return ok(`unsigned TrustSet ${a.action ?? "deep_freeze"} ${a.currency} ↔ ${a.counterparty} (${r.network})`, r as any); }
+  catch (e) { return fail((e as Error).message); }
 });
 
 server.registerTool("prepare_transaction", {

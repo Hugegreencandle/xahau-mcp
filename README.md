@@ -149,6 +149,9 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 | `build_sethook_unsigned` | UNSIGNED SetHook with automatic `analyze_hook` preflight. |
 | `build_claimreward_unsigned` · `build_import_unsigned` · `build_payment_unsigned` | UNSIGNED ClaimReward · Import/B2M · Payment. |
 | `build_remit_unsigned` | UNSIGNED **Remit (XLS-55)** — atomic multi-asset push: multiple currencies (native + issued) and/or URIToken transfers and/or an inline URIToken mint to one destination, all-or-nothing. Canonical `AmountEntry`/`MintURIToken` nesting; auto trustline/reserve/account-create semantics; optional third-party `Inform`. Payload preflight included. |
+| `build_set_remarks_unsigned` | UNSIGNED **SetRemarks** (Remarks amendment) — attach/update/delete key-value remarks on a ledger object you own/issue. `immutable` (tfImmutable) support, delete-by-omission, 32-max + uniqueness + size guards. Powers dynamic NFTs. |
+| `build_clawback_unsigned` | UNSIGNED **Clawback** — issuer revokes issued tokens from a holder (`Amount.issuer` = holder, the canonical gotcha). Opt-in + XAH guards. |
+| `build_deepfreeze_unsigned` | UNSIGNED **TrustSet** freeze toggle — `deep_freeze` (blocks send+receive), `freeze`, and their clears, mapped to the correct `tfSetDeepFreeze`/`tfSetFreeze` flags. |
 | `prepare_transaction` | Autofill Sequence/Fee/LastLedgerSequence/NetworkID from the live network → ready to sign offline (never signs). |
 
 ## Install
