@@ -75,6 +75,13 @@ export const PROVEN_QUANTUM_HOOKS: Record<string, { name: string; invariant: str
     invariant: "master-disuse",
     note: "PROVEN: master key cannot sign ordinary outgoing txns (forces rotatable-key use). Master is admitted only for key/hook management (brick-safe). Caveat: master-key DISUSE, not compromise defense.",
   },
+  // qday_vault — Q-Day recovery freeze: every outgoing tx requires the committed quantum-safe preimage.
+  // Proven 2026-06-21 (xahc-prover 40th invariant `qday-freeze`), under SHA-512Half collision-resistance.
+  "D1609B6E24EC3F29296FDB0071068273DBDA0428B6F13FDB6FEF71AC6FB9478F": {
+    name: "qday_vault",
+    invariant: "qday-freeze",
+    note: "PROVEN: funds move ONLY for the holder of the committed quantum-safe secret — a Shor-broken classical key alone cannot spend. The strongest hardening; losing the secret loses access (no escape hatch by design).",
+  },
 };
 
 /** Hardening-level label for a tier — framed as future-proofing, NOT a present-day safety alarm. */
