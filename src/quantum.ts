@@ -576,3 +576,30 @@ export async function disableMasterReadiness(address: string, network: Network, 
 
   return { address, alreadyDisabled, regularKey, regularKeyAccountId, signerListSet, signerListReachable, regularKeyHasSigned, multisigHasSigned, signerListProven, safeToDisable, proven, reasons };
 }
+
+/**
+ * Derive an account's MASTER public key from the ledger: the SigningPubKey of any self-originated tx
+ * whose pubkey hashes to the account's OWN AccountID. Scans OLDEST-first (master is used early). Returns
+ * found=false if the master key has never signed — then the pubkey is not on-ledger and cannot be derived
+ * here (the owner must supply it from their wallet). Read-only.
+ */
+export async function masterPubkey(address: string, network: Network, scanPages = 6, pageLimit = 200) {
+  const v = validateAddress(address);
+  if (!v.valid || !("accountId" in v)) throw new Error("not a valid r-address / X-address");
+  const accountId = (v as { accountId: string }).accountId;
+  let marker: unknown = undefined, pages = 0;
+  while (pages < scanPages) {
+    const params: Record<string, unknown> = { account: address, limit: pageLimit, ledger_index_min: -1, ledger_index_max: -1, forward: true };
+    if (marker !== undefined) params.marker = marker;
+    const r = await rpc<{ transactions?: any[]; marker?: unknown }>("account_tx", params, network);
+    for (const t of r.transactions ?? []) {
+      const tx = (t.tx ?? t.tx_json ?? t) as Record<string, any>;
+      if (tx.Account !== address) continue;
+      const spk = typeof tx.SigningPubKey === "string" ? tx.SigningPubKey : "";
+      if (spk && accountIdFromPubkey(spk) === accountId)
+        return { found: true, pubkey: spk.toUpperCase(), accountId };
+    }
+    pages++; marker = r.marker; if (marker == null) break;
+  }
+  return { found: false, pubkey: null as string | null, accountId };
+}

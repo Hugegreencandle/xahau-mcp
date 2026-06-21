@@ -26,7 +26,7 @@ import { classifyHook } from "./classify.js";
 import { diffHooks } from "./diff.js";
 import { scaffoldHook } from "./scaffold.js";
 import { computeReward } from "./rewards.js";
-import { quantumGrade, hndlExposure, quantumScorecard, renderScorecardMarkdown, configCensus, disableMasterReadiness } from "./quantum.js";
+import { quantumGrade, hndlExposure, quantumScorecard, renderScorecardMarkdown, configCensus, disableMasterReadiness, masterPubkey } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { getAmendmentStatus, predictAmendmentActivation, diffNodeAmendments, checkAmendmentBlocked } from "./amendments.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned, buildRemitUnsigned, buildSetRemarksUnsigned, buildClawbackUnsigned, buildDeepFreezeUnsigned, buildSetRegularKeyUnsigned, buildDisableMasterUnsigned, buildSignerListSetUnsigned } from "./builders.js";
@@ -1005,6 +1005,14 @@ server.registerTool("build_set_regular_key_unsigned", {
   description: "ROTATION WIZARD step 1 — assemble an UNSIGNED SetRegularKey to assign a rotatable regular key (or remove it if regularKey omitted). Moving authority off the unrotatable master key is the near-term quantum (HNDL) defense. Returns unsigned JSON + signing instructions; NEVER touches a secret. After it lands, send a TEST tx signed by the new key before disabling master.",
   inputSchema: { account: z.string().min(25), regularKey: z.string().min(25).optional().describe("new regular key r-address; omit to REMOVE"), network: NET.default("testnet") },
 }, async (a) => { try { const r = buildSetRegularKeyUnsigned(a as any); return ok(`unsigned SetRegularKey for ${a.account} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("master_pubkey", {
+  description: "Derive an account's MASTER public key from the ledger — the SigningPubKey of any self-originated tx whose pubkey hashes to the account's own AccountID. Needed to configure a qkey_guard hook (its MPK param). Returns found=false if the master key has never signed (then the pubkey is not on-ledger). Read-only.",
+  inputSchema: { account: z.string().min(25), network: NET.default("mainnet") },
+}, async ({ account, network }) => {
+  try { const r = await masterPubkey(account, network as Net); return ok(`${account}: master pubkey ${r.found ? r.pubkey : "NOT on-ledger (master key never signed)"}`, r); }
+  catch (e) { return fail((e as Error).message); }
+});
 
 server.registerTool("disable_master_readiness", {
   description: "ROTATION WIZARD gate — is it SAFE to disable this account's master key? Checks for a working alternative signer: proves whether the configured regular key has ALREADY signed for the account (gold standard) and whether a signer list exists. Returns safeToDisable + proven + reasons. Read-only. Run this BEFORE build_disable_master_unsigned.",
