@@ -54,6 +54,14 @@ export const QUANTUM_OUT = {
   framing: str.optional(), recommendations: arr, ...err,
 };
 
+export const HNDL_OUT = {
+  address: str, accountId: str, network: str,
+  exposed: bool, exposureClass: str, masterExposed: bool, regularExposed: bool, multisigExposed: bool,
+  signedTxCount: num, firstExposureLedger: num.nullable().optional(),
+  severity: str, recoverable: bool.nullable().optional(), conclusive: bool, balanceDrops: str, balanceAtRiskDrops: str,
+  masterDisabled: bool, scanned: z.unknown(), note: str, ...err,
+};
+
 export const DECODE_HOOKON_OUT = { firesOn: arr, count: num, hookOn: str, ...err };
 export const ENCODE_HOOKON_OUT = { hookOn: str, firesOn: arr, ...err };
 

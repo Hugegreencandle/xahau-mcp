@@ -26,7 +26,7 @@ import { classifyHook } from "./classify.js";
 import { diffHooks } from "./diff.js";
 import { scaffoldHook } from "./scaffold.js";
 import { computeReward } from "./rewards.js";
-import { quantumGrade } from "./quantum.js";
+import { quantumGrade, hndlExposure } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { getAmendmentStatus, predictAmendmentActivation, diffNodeAmendments, checkAmendmentBlocked } from "./amendments.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned, buildRemitUnsigned, buildSetRemarksUnsigned, buildClawbackUnsigned, buildDeepFreezeUnsigned } from "./builders.js";
@@ -34,7 +34,7 @@ import { buildCronSet, listCronJobs, monitorCronHealth } from "./cron.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
-import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT, AMENDMENT_STATUS_OUT, AMENDMENT_PREDICT_OUT, AMENDMENT_BLOCKED_OUT, AMENDMENT_DIFF_OUT, TRACE_STAKEHOLDERS_OUT, DOUBLE_THREADING_OUT, ACCOUNT_REMARKS_OUT } from "./outputSchemas.js";
+import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, HNDL_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT, AMENDMENT_STATUS_OUT, AMENDMENT_PREDICT_OUT, AMENDMENT_BLOCKED_OUT, AMENDMENT_DIFF_OUT, TRACE_STAKEHOLDERS_OUT, DOUBLE_THREADING_OUT, ACCOUNT_REMARKS_OUT } from "./outputSchemas.js";
 import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { diagnoseFailedTx } from "./diagnose.js";
@@ -874,6 +874,17 @@ server.registerTool("quantum_grade", {
 }, async ({ address, network }) => {
   try { const g = await quantumGrade(address, network as Net); return ok(`${address}: ${g.tierLabel} (${g.score}/100) — master key ${g.masterDisabled ? "disabled" : "active (normal)"}`, g); }
   catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("hndl_exposure", {
+  description: "Measure an account's Harvest-Now-Decrypt-Later exposure: has its signing PUBLIC KEY been revealed on-ledger, and which key? An r-address is a HASH of the pubkey; the pubkey is exposed only once the account signs a tx. Walks history OLDEST-first and classifies: master (IRREVERSIBLE — master key can't be rotated), regular / multisig (RECOVERABLE — rotate the key), or none (never signed = hash-only, not Shor-actionable). Reports balance-at-risk + honest truncation caveat. Read-only.",
+  inputSchema: { address: z.string().min(25).describe("r-address"), network: NET, maxPages: z.number().int().min(1).max(20).optional().describe("history pages to scan (default 6 × 400 tx)") },
+  outputSchema: HNDL_OUT,
+}, async ({ address, network, maxPages }) => {
+  try {
+    const e = await hndlExposure(address, network as Net, maxPages ?? 6);
+    return ok(`${e.address}: HNDL ${e.exposureClass.toUpperCase()} (${e.severity}) — ${e.signedTxCount} signed tx, ${e.exposed ? `${e.balanceAtRiskDrops} drops at risk` : "pubkey not yet on-ledger"}`, e);
+  } catch (err) { return fail((err as Error).message); }
 });
 
 server.registerTool("governance_state", {
