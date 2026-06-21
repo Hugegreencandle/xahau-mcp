@@ -26,10 +26,10 @@ import { classifyHook } from "./classify.js";
 import { diffHooks } from "./diff.js";
 import { scaffoldHook } from "./scaffold.js";
 import { computeReward } from "./rewards.js";
-import { quantumGrade, hndlExposure, quantumScorecard, renderScorecardMarkdown, configCensus } from "./quantum.js";
+import { quantumGrade, hndlExposure, quantumScorecard, renderScorecardMarkdown, configCensus, disableMasterReadiness } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { getAmendmentStatus, predictAmendmentActivation, diffNodeAmendments, checkAmendmentBlocked } from "./amendments.js";
-import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned, buildRemitUnsigned, buildSetRemarksUnsigned, buildClawbackUnsigned, buildDeepFreezeUnsigned } from "./builders.js";
+import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned, buildRemitUnsigned, buildSetRemarksUnsigned, buildClawbackUnsigned, buildDeepFreezeUnsigned, buildSetRegularKeyUnsigned, buildDisableMasterUnsigned, buildSignerListSetUnsigned } from "./builders.js";
 import { buildCronSet, listCronJobs, monitorCronHealth } from "./cron.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
@@ -1000,6 +1000,35 @@ server.registerTool("build_import_unsigned", {
   description: "Assemble an UNSIGNED Import (Burn2Mint) transaction wrapping a HEX-encoded XPOP in the Blob field. Returns unsigned JSON + offline signing instructions. Never signs; testnet by default.",
   inputSchema: { account: z.string().min(25), xpopBlobHex: z.string().min(2).describe("HEX-encoded XPOP proof"), network: NET.default("testnet") },
 }, async (a) => { try { const r = buildImportUnsigned(a as any); return ok(`unsigned Import for ${a.account} (${r.network}, ${a.xpopBlobHex.length / 2}B xpop)`, r as any); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("build_set_regular_key_unsigned", {
+  description: "ROTATION WIZARD step 1 — assemble an UNSIGNED SetRegularKey to assign a rotatable regular key (or remove it if regularKey omitted). Moving authority off the unrotatable master key is the near-term quantum (HNDL) defense. Returns unsigned JSON + signing instructions; NEVER touches a secret. After it lands, send a TEST tx signed by the new key before disabling master.",
+  inputSchema: { account: z.string().min(25), regularKey: z.string().min(25).optional().describe("new regular key r-address; omit to REMOVE"), network: NET.default("testnet") },
+}, async (a) => { try { const r = buildSetRegularKeyUnsigned(a as any); return ok(`unsigned SetRegularKey for ${a.account} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
+
+server.registerTool("disable_master_readiness", {
+  description: "ROTATION WIZARD gate — is it SAFE to disable this account's master key? Checks for a working alternative signer: proves whether the configured regular key has ALREADY signed for the account (gold standard) and whether a signer list exists. Returns safeToDisable + proven + reasons. Read-only. Run this BEFORE build_disable_master_unsigned.",
+  inputSchema: { account: z.string().min(25), network: NET.default("mainnet") },
+}, async ({ account, network }) => {
+  try { const r = await disableMasterReadiness(account, network as Net); return ok(`${account}: ${r.safeToDisable ? (r.proven ? "SAFE (alternative signer proven)" : "configured but UNVERIFIED — test it first") : "NOT SAFE to disable master"}`, r); }
+  catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("build_disable_master_unsigned", {
+  description: "ROTATION WIZARD step 3 — assemble an UNSIGNED AccountSet asfDisableMaster (retire the master key). IRREVERSIBLE. ALWAYS runs disable_master_readiness internally and FAILS CLOSED — blocked=true unless a PROVEN working alternative signer exists (a regular key that has signed, or a reachable signer list that has multi-signed). Never signs.",
+  inputSchema: { account: z.string().min(25), network: NET.default("mainnet") },
+}, async ({ account, network }) => {
+  try {
+    const readiness = await disableMasterReadiness(account, network as Net);
+    const r = buildDisableMasterUnsigned({ account, network: network as Net, readiness });
+    return ok(`${r.blocked ? "⚠ BLOCKED — " : ""}unsigned disable-master for ${account} (${r.network})`, { ...r, readiness } as any);
+  } catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("build_signer_list_set_unsigned", {
+  description: "ROTATION WIZARD alt — assemble an UNSIGNED SignerListSet (multisig). Often SAFER than disable-master for high-value accounts: multiple recovery keys, no single point of loss. quorum=0 removes the list. Rejects an unreachable quorum (would lock out the account). Never signs.",
+  inputSchema: { account: z.string().min(25), quorum: z.number().int().min(0), signers: z.array(z.object({ account: z.string().min(25), weight: z.number().int().min(1) })).optional(), network: NET.default("testnet") },
+}, async (a) => { try { const r = buildSignerListSetUnsigned(a as any); return ok(`unsigned SignerListSet (quorum ${a.quorum}) for ${a.account} (${r.network})`, r as any); } catch (e) { return fail((e as Error).message); } });
 
 server.registerTool("build_payment_unsigned", {
   description: "Assemble an UNSIGNED XAH Payment (amount in drops). Returns unsigned JSON + offline signing instructions + payload preflight. Never signs; testnet by default.",

@@ -346,3 +346,79 @@ export function buildDeepFreezeUnsigned(input: {
     preflightFindings: findings,
   };
 }
+
+// ── Key-rotation builders (non-custodial). The rotation-wizard backend. ────────
+// Moving authority OFF the unrotatable master key is the near-term quantum (HNDL)
+// defense. These NEVER touch a secret; the user signs in their own wallet.
+
+/** SetRegularKey — assign (or, if regularKey omitted, REMOVE) a rotatable regular key. */
+export function buildSetRegularKeyUnsigned(input: { account: string; regularKey?: string; network?: Network }): BuildResult {
+  const network = input.network ?? "testnet";
+  if (!validateAddress(input.account).valid) throw new Error("account is not a valid r-address");
+  const tx: Record<string, unknown> = { TransactionType: "SetRegularKey", ...base(input.account, network) };
+  if (input.regularKey) {
+    if (!validateAddress(input.regularKey).valid) throw new Error("regularKey is not a valid r-address");
+    if (input.regularKey === input.account) throw new Error("regularKey must differ from the account (a self regular key is pointless)");
+    tx.RegularKey = input.regularKey;
+  }
+  return {
+    unsignedTx: tx, network, signingInstructions: SIGNING_INSTRUCTIONS,
+    warning: input.regularKey
+      ? "After this lands, send a small TEST transaction SIGNED BY THE NEW REGULAR KEY to prove it controls the account BEFORE you disable the master key. Do not skip this — it is the only thing standing between you and a bricked account."
+      : "This REMOVES the regular key. If the master key is disabled, ensure a signer list still controls the account or you will lose access.",
+  };
+}
+
+/** AccountSet asfDisableMaster — retire the master key. IRREVERSIBLE except via the regular key /
+ *  signer list you set first. Pass a readiness assessment to gate it (blocked unless safe). */
+const ASF_DISABLE_MASTER = 4;
+export function buildDisableMasterUnsigned(input: {
+  account: string; network?: Network;
+  readiness?: { safeToDisable: boolean; reasons: string[] };
+}): BuildResult {
+  const network = input.network ?? "testnet";
+  if (!validateAddress(input.account).valid) throw new Error("account is not a valid r-address");
+  const r = input.readiness;
+  // FAIL CLOSED: with no readiness assessment we CANNOT prove a working alternative exists, so block.
+  const blocked = r ? !r.safeToDisable : true;
+  let warning =
+    "IRREVERSIBLE: disabling the master key means ONLY the regular key / signer list can ever sign for this account. If that key is lost, the account and its funds are permanently unrecoverable. Confirm your alternative signer works FIRST.";
+  if (!r) warning = `BLOCKED — no safety assessment supplied. Run disable_master_readiness first; this tool refuses to build an unguarded master-disable. ${warning}`;
+  else if (!r.safeToDisable) warning = `BLOCKED — no PROVEN working alternative signer: ${r.reasons.join("; ")}. Set a regular key (or reachable signer list) AND prove it can sign before disabling the master key.`;
+  else warning = `PROCEED WITH CARE — a proven alternative signer exists, but this is IRREVERSIBLE. ${r.reasons.join("; ")}. ${warning}`;
+  return {
+    unsignedTx: { TransactionType: "AccountSet", ...base(input.account, network), SetFlag: ASF_DISABLE_MASTER },
+    network, signingInstructions: SIGNING_INSTRUCTIONS, blocked, warning,
+  };
+}
+
+/** SignerListSet — install (quorum>0) or remove (quorum=0) a multisig signer list. Often SAFER than
+ *  disable-master for high-value accounts: multiple recovery keys, no single point of loss. */
+export function buildSignerListSetUnsigned(input: {
+  account: string; quorum: number; signers?: { account: string; weight: number }[]; network?: Network;
+}): BuildResult {
+  const network = input.network ?? "testnet";
+  if (!validateAddress(input.account).valid) throw new Error("account is not a valid r-address");
+  const tx: Record<string, unknown> = { TransactionType: "SignerListSet", ...base(input.account, network), SignerQuorum: input.quorum };
+  if (input.quorum > 0) {
+    const signers = input.signers ?? [];
+    if (signers.length < 1) throw new Error("quorum > 0 requires at least one signer");
+    const seen = new Set<string>();
+    for (const s of signers) {
+      if (!validateAddress(s.account).valid) throw new Error(`signer ${s.account} is not a valid r-address`);
+      if (s.account === input.account) throw new Error("a signer must differ from the account itself");
+      if (!(s.weight > 0)) throw new Error(`signer ${s.account} needs a positive weight`);
+      if (seen.has(s.account)) throw new Error(`duplicate signer ${s.account} — the protocol rejects duplicate entries (would invalidate the list)`);
+      seen.add(s.account);
+    }
+    const totalWeight = signers.reduce((n, s) => n + s.weight, 0);
+    if (totalWeight < input.quorum) throw new Error(`unreachable quorum: total signer weight ${totalWeight} < quorum ${input.quorum} (the account would be locked out)`);
+    tx.SignerEntries = signers.map((s) => ({ SignerEntry: { Account: s.account, SignerWeight: s.weight } }));
+  }
+  return {
+    unsignedTx: tx, network, signingInstructions: SIGNING_INSTRUCTIONS,
+    warning: input.quorum > 0
+      ? "Verify every signer address is one you control or trust. After this lands, test a multi-signed transaction BEFORE disabling the master key."
+      : "This REMOVES the signer list. Ensure a regular key still controls the account if the master key is disabled.",
+  };
+}

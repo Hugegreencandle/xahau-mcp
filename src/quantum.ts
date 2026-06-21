@@ -502,3 +502,70 @@ export async function configCensus(network: Network, maxPages = 400, pageLimit =
     ...aggregateConfigCensus(accts),
   };
 }
+
+// ── Disable-master safety gate (brick prevention) ─────────────────────────────
+/**
+ * Can this account safely disable its master key? GOLD STANDARD, applied UNIFORMLY: an alternative
+ * signer must be PROVEN to already work, not merely configured —
+ *   - regular key: a self-originated tx whose SigningPubKey hashes to the RegularKey AccountID, OR
+ *   - signer list: the list's quorum is REACHABLE (quorum ≤ Σ weights) AND a self-originated
+ *     multi-signed tx (empty SigningPubKey + Signers) has been seen.
+ * A bare/never-used/unreachable alternative is NOT safe — disabling master then bricks the account.
+ * `safeToDisable` requires proof; a configured-but-unverified alternative is reported and BLOCKED.
+ */
+export async function disableMasterReadiness(address: string, network: Network, scanPages = 6, pageLimit = 200) {
+  const a = (await getAccountInfo(address, network)).account_data as Record<string, any>;
+  const alreadyDisabled = (Number(a.Flags ?? 0) & LSF_DISABLE_MASTER) !== 0;
+  const regularKey: string | null = a.RegularKey ?? null;
+  const rkv = regularKey ? validateAddress(regularKey) : null;
+  const regularKeyAccountId = rkv && rkv.valid && "accountId" in rkv ? (rkv as { accountId: string }).accountId : null;
+
+  // Signer list: existence is NOT enough — read its quorum + weights to confirm it's REACHABLE.
+  let signerListSet = false, signerListReachable = false;
+  try {
+    const objs = await getAccountObjects(address, network, "signer_list");
+    const sl = objs.account_objects.find((o: any) => o.LedgerEntryType === "SignerList") as any;
+    if (sl) {
+      signerListSet = true;
+      const quorum = Number(sl.SignerQuorum ?? 0);
+      const totalWeight = (sl.SignerEntries ?? []).reduce((n: number, e: any) => n + Number(e?.SignerEntry?.SignerWeight ?? 0), 0);
+      signerListReachable = quorum > 0 && totalWeight >= quorum;
+    }
+  } catch { /* tolerate — leaves signerListSet=false => conservative */ }
+
+  // Scan history for PROOF a non-master signer has worked: a regular-key-signed tx, or a multi-signed tx.
+  let regularKeyHasSigned = false, multisigHasSigned = false;
+  {
+    let marker: unknown = undefined, pages = 0;
+    while (pages < scanPages && !(regularKeyHasSigned && multisigHasSigned)) {
+      const params: Record<string, unknown> = { account: address, limit: pageLimit, ledger_index_min: -1, ledger_index_max: -1, forward: false };
+      if (marker !== undefined) params.marker = marker;
+      const r = await rpc<{ transactions?: any[]; marker?: unknown }>("account_tx", params, network);
+      for (const t of r.transactions ?? []) {
+        const tx = (t.tx ?? t.tx_json ?? t) as Record<string, any>;
+        if (tx.Account !== address) continue;
+        const spk = typeof tx.SigningPubKey === "string" ? tx.SigningPubKey : "";
+        if (spk === "" && Array.isArray(tx.Signers) && tx.Signers.length > 0) multisigHasSigned = true;
+        else if (spk && regularKeyAccountId && accountIdFromPubkey(spk) === regularKeyAccountId) regularKeyHasSigned = true;
+      }
+      pages++; marker = r.marker; if (marker == null) break;
+    }
+  }
+
+  // A signer-list alternative is only PROVEN when it has actually multi-signed AND is currently reachable.
+  const signerListProven = multisigHasSigned && signerListReachable;
+  const proven = regularKeyHasSigned || signerListProven;
+  const safeToDisable = !alreadyDisabled && proven;
+
+  const reasons: string[] = [];
+  if (alreadyDisabled) reasons.push("master key is already disabled");
+  if (!regularKey && !signerListSet) reasons.push("no regular key and no signer list — the master key is the ONLY signer; disabling it WILL brick the account");
+  if (regularKey && !regularKeyHasSigned) reasons.push("a regular key is set but has NOT been seen signing — UNVERIFIED. Send a test tx signed by it first.");
+  if (signerListSet && !signerListReachable) reasons.push("a signer list exists but its quorum is UNREACHABLE (quorum > total signer weight) — it cannot sign; disabling master would brick the account");
+  if (signerListSet && signerListReachable && !multisigHasSigned) reasons.push("a signer list is reachable but no multi-signed tx was seen — UNVERIFIED. Send a test multi-signed tx first.");
+  if (regularKeyHasSigned) reasons.push("the configured regular key has signed for this account (PROVEN alternative)");
+  if (signerListProven) reasons.push("the signer list is reachable and has multi-signed (PROVEN alternative)");
+  reasons.push("note: 'has signed' proves the key worked historically, not that you still hold it — confirm you control the alternative signer NOW.");
+
+  return { address, alreadyDisabled, regularKey, regularKeyAccountId, signerListSet, signerListReachable, regularKeyHasSigned, multisigHasSigned, signerListProven, safeToDisable, proven, reasons };
+}
