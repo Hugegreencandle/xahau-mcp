@@ -62,6 +62,15 @@ export const HNDL_OUT = {
   masterDisabled: bool, scanned: z.unknown(), note: str, ...err,
 };
 
+export const SCORECARD_OUT = {
+  network: str, population: str, caveat: str, originatorSample: bool, attempted: num, skipped: num,
+  sampled: num, byExposureClass: z.unknown(), byGradeTier: z.unknown(),
+  exposedCount: num, exposedPct: num, masterExposedCount: num, masterExposedPct: num,
+  conclusiveCount: num, unknownCount: num, provenQuantumHookCount: num,
+  totalBalanceDrops: str, balanceAtRiskDrops: str, masterExposedBalanceDrops: str,
+  topExposedByBalance: z.unknown(), rows: z.unknown(), markdown: str.optional(), ...err,
+};
+
 export const DECODE_HOOKON_OUT = { firesOn: arr, count: num, hookOn: str, ...err };
 export const ENCODE_HOOKON_OUT = { hookOn: str, firesOn: arr, ...err };
 

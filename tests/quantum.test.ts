@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { gradeSignals, classifyHndl, accountIdFromPubkey, assessCoverage } from "../src/quantum.js";
+import { gradeSignals, classifyHndl, accountIdFromPubkey, assessCoverage, aggregateScorecard } from "../src/quantum.js";
+import type { ScorecardRow } from "../src/quantum.js";
 
 describe("quantum_grade scoring", () => {
   it("master enabled, nothing else = LOW (exposed)", () => {
@@ -153,5 +154,54 @@ describe("HNDL coverage proof (audit MUST-FIX: no false 'safe')", () => {
     const cov = assessCoverage({ exposed: false, nodeEarliest: null, oldestTxLedger: 500, newestTxLedger: 900, accountLastLedger: 900 });
     expect(cov.earlySideComplete).toBe(false);
     expect(cov.conclusive).toBe(false);
+  });
+});
+
+describe("quantum scorecard aggregation", () => {
+  const row = (o: Partial<ScorecardRow>): ScorecardRow => ({
+    address: "r" + Math.abs((o.gradeScore ?? 0) * 7 + 1), exposureClass: "none", severity: "NONE", conclusive: true,
+    balanceDrops: "0", balanceAtRiskDrops: "0", gradeScore: 0, gradeTier: "LOW", hasProvenQuantumHook: false, masterDisabled: false, ...o,
+  });
+
+  it("buckets by class; non-conclusive 'none' => unknown, never none", () => {
+    const a = aggregateScorecard([
+      row({ exposureClass: "master", severity: "CRITICAL", balanceDrops: "1000000", balanceAtRiskDrops: "1000000" }),
+      row({ exposureClass: "regular", severity: "RECOVERABLE", balanceDrops: "500000", balanceAtRiskDrops: "500000" }),
+      row({ exposureClass: "none", severity: "NONE", conclusive: true }),
+      row({ exposureClass: "none", severity: "UNKNOWN", conclusive: false }),  // <- must bucket as unknown
+    ]);
+    expect(a.byExposureClass).toEqual({ master: 1, regular: 1, multisig: 0, none: 1, unknown: 1 });
+    expect(a.exposedCount).toBe(2);          // master + regular (unknown-none is NOT counted exposed)
+    expect(a.masterExposedCount).toBe(1);
+    expect(a.unknownCount).toBe(1);
+  });
+
+  it("sums balances with BigInt (no float drift) and at-risk", () => {
+    const a = aggregateScorecard([
+      row({ exposureClass: "master", balanceDrops: "9999999999999999", balanceAtRiskDrops: "9999999999999999" }),
+      row({ exposureClass: "none", balanceDrops: "1", balanceAtRiskDrops: "0" }),
+    ]);
+    expect(a.totalBalanceDrops).toBe("10000000000000000");
+    expect(a.balanceAtRiskDrops).toBe("9999999999999999");
+    expect(a.masterExposedBalanceDrops).toBe("9999999999999999");
+  });
+
+  it("topExposedByBalance sorts desc and excludes 'none'", () => {
+    const a = aggregateScorecard([
+      row({ exposureClass: "regular", balanceAtRiskDrops: "100" }),
+      row({ exposureClass: "master", balanceAtRiskDrops: "900" }),
+      row({ exposureClass: "none", balanceAtRiskDrops: "0" }),
+      row({ exposureClass: "multisig", balanceAtRiskDrops: "500" }),
+    ]);
+    expect(a.topExposedByBalance.map((r) => r.balanceAtRiskDrops)).toEqual(["900", "500", "100"]);
+  });
+
+  it("percentages computed over sample size", () => {
+    const a = aggregateScorecard([
+      row({ exposureClass: "master" }), row({ exposureClass: "master" }),
+      row({ exposureClass: "none" }), row({ exposureClass: "none" }),
+    ]);
+    expect(a.exposedPct).toBe(50);
+    expect(a.masterExposedPct).toBe(50);
   });
 });

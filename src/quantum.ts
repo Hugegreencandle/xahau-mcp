@@ -276,3 +276,156 @@ export async function hndlExposure(address: string, network: Network, maxPages =
       : note,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QUANTUM READINESS SCORECARD — aggregate HNDL exposure + grade across a SAMPLE of
+// accounts into a network-level readiness snapshot. Honesty: this is a SAMPLE of
+// (by default) recently-active accounts, NOT the whole ledger — active accounts skew
+// toward exposed, so figures are an upper-ish bound on exposure, not a census.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ScorecardRow {
+  address: string;
+  exposureClass: HndlClass;
+  severity: "NONE" | "RECOVERABLE" | "CRITICAL" | "UNKNOWN";
+  conclusive: boolean;
+  balanceDrops: string;
+  balanceAtRiskDrops: string;
+  gradeScore: number;
+  gradeTier: "LOW" | "MEDIUM" | "HIGH";
+  hasProvenQuantumHook: boolean;
+  masterDisabled: boolean;
+}
+
+const addDrops = (a: string, b: string): string => (BigInt(a || "0") + BigInt(b || "0")).toString();
+
+/** PURE aggregation over per-account rows — no network. The scorecard's testable core. */
+export function aggregateScorecard(rows: ScorecardRow[]) {
+  // Bucket by the EFFECTIVE class: a non-conclusive "none" is reported as "unknown", never "none".
+  const byClass = { master: 0, regular: 0, multisig: 0, none: 0, unknown: 0 };
+  const byTier = { LOW: 0, MEDIUM: 0, HIGH: 0 };
+  let totalBalance = "0", balanceAtRisk = "0", masterExposedBalance = "0";
+  let masterExposed = 0, exposed = 0, conclusive = 0, provenHook = 0;
+  for (const r of rows) {
+    const eff: keyof typeof byClass = !r.conclusive && r.exposureClass === "none" ? "unknown" : r.exposureClass;
+    byClass[eff]++;
+    byTier[r.gradeTier]++;
+    totalBalance = addDrops(totalBalance, r.balanceDrops);
+    balanceAtRisk = addDrops(balanceAtRisk, r.balanceAtRiskDrops);
+    if (r.exposureClass === "master") { masterExposed++; masterExposedBalance = addDrops(masterExposedBalance, r.balanceDrops); }
+    if (r.exposureClass !== "none") exposed++;
+    if (r.conclusive) conclusive++;
+    if (r.hasProvenQuantumHook) provenHook++;
+  }
+  const n = rows.length || 1;
+  const pct = (x: number) => Math.round((x / n) * 1000) / 10;
+  const topExposedByBalance = [...rows]
+    .filter((r) => r.exposureClass !== "none")
+    .sort((a, b) => (BigInt(b.balanceAtRiskDrops) > BigInt(a.balanceAtRiskDrops) ? 1 : -1))
+    .slice(0, 10);
+  return {
+    sampled: rows.length,
+    byExposureClass: byClass,
+    byGradeTier: byTier,
+    exposedCount: exposed, exposedPct: pct(exposed),
+    masterExposedCount: masterExposed, masterExposedPct: pct(masterExposed),
+    conclusiveCount: conclusive, unknownCount: byClass.unknown,
+    provenQuantumHookCount: provenHook,
+    totalBalanceDrops: totalBalance, balanceAtRiskDrops: balanceAtRisk, masterExposedBalanceDrops: masterExposedBalance,
+    topExposedByBalance,
+  };
+}
+
+/** Sample distinct accounts seen in the last `ledgers` validated ledgers (active-account sample). */
+export async function sampleRecentAccounts(network: Network, ledgers = 8, cap = 50): Promise<string[]> {
+  const tip = Number(((await rpc<{ ledger: { ledger_index: number } }>("ledger", { ledger_index: "validated" }, network)).ledger ?? {}).ledger_index);
+  const set = new Set<string>();
+  for (let i = 0; i < ledgers && set.size < cap; i++) {
+    try {
+      const l = await rpc<{ ledger?: { transactions?: any[] } }>("ledger", { ledger_index: tip - i, transactions: true, expand: true }, network);
+      for (const t of l.ledger?.transactions ?? []) {
+        const tx = (t.tx_json ?? t) as Record<string, any>;
+        if (tx.Account) set.add(tx.Account);
+        if (set.size >= cap) break;
+      }
+    } catch { /* tolerate a bad ledger */ }
+  }
+  return [...set].slice(0, cap);
+}
+
+/** Build a scorecard over a list of accounts (or a fresh active-account sample). Bounded + honest. */
+export async function quantumScorecard(network: Network, opts: { accounts?: string[]; sampleLedgers?: number; cap?: number; maxPages?: number } = {}) {
+  const accounts = opts.accounts?.length ? opts.accounts : await sampleRecentAccounts(network, opts.sampleLedgers ?? 8, opts.cap ?? 40);
+  const rows: ScorecardRow[] = [];
+  for (const address of accounts) {
+    try {
+      const e = await hndlExposure(address, network, opts.maxPages ?? 6);
+      const g = await quantumGrade(address, network);
+      rows.push({
+        address, exposureClass: e.exposureClass, severity: e.severity, conclusive: e.conclusive,
+        balanceDrops: e.balanceDrops, balanceAtRiskDrops: e.balanceAtRiskDrops,
+        gradeScore: g.score, gradeTier: g.tier, hasProvenQuantumHook: g.hasProvenQuantumHook, masterDisabled: e.masterDisabled,
+      });
+    } catch { /* skip an account that errors (deleted/anomalous) */ }
+  }
+  const originatorSample = !opts.accounts?.length;
+  return {
+    network,
+    population: originatorSample ? `sample of recently-active accounts (last ${opts.sampleLedgers ?? 8} ledgers)` : "caller-supplied account list",
+    originatorSample,
+    attempted: accounts.length,
+    skipped: accounts.length - rows.length,
+    caveat: "SAMPLE, not a ledger census. Recently-active accounts skew toward exposed (they have signed)" +
+      (originatorSample ? " — in fact this default sample is drawn from transaction ORIGINATORS, so 'exposed %' is ~100% BY CONSTRUCTION and is NOT a network statistic." : ".") +
+      " Non-conclusive negatives are reported as 'unknown', never 'safe'.",
+    ...aggregateScorecard(rows),
+    rows,
+  };
+}
+
+const dropsToXah = (d: string): string => {
+  const n = BigInt(d || "0");
+  const sign = n < 0n ? "-" : "";
+  const abs = n < 0n ? -n : n;
+  return `${sign}${abs / 1000000n}.${(abs % 1000000n).toString().padStart(6, "0")}`;
+};
+
+/** Render a scorecard result to public-facing markdown. */
+export function renderScorecardMarkdown(s: Awaited<ReturnType<typeof quantumScorecard>>, asOf: string): string {
+  const c = s.byExposureClass;
+  const L: string[] = [];
+  L.push(`# Quantum Readiness Scorecard${s.originatorSample ? " (active-account sample)" : ""} — ${s.network}`);
+  L.push(`_As of ${asOf}. ${s.population}. n=${s.sampled}${s.skipped ? ` (of ${s.attempted} attempted; ${s.skipped} skipped — deleted/anomalous/errored)` : ""}._`);
+  L.push("");
+  L.push(`> ${s.caveat}`);
+  L.push("");
+  L.push("## Headline");
+  L.push(`- **Exposed (signing pubkey on-ledger):** ${s.exposedCount}/${s.sampled}${s.originatorSample ? " — ~100% BY CONSTRUCTION of an originator sample; NOT a network statistic" : ` (${s.exposedPct}%)`}`);
+  L.push(`- **Master-key exposed (IRREVERSIBLE):** ${s.masterExposedCount}/${s.sampled} (${s.masterExposedPct}%) — ${dropsToXah(s.masterExposedBalanceDrops)} XAH`);
+  L.push(`- **Total balance at risk (sample):** ${dropsToXah(s.balanceAtRiskDrops)} XAH of ${dropsToXah(s.totalBalanceDrops)} XAH scanned`);
+  L.push(`- **Conclusive verdicts:** ${s.conclusiveCount}/${s.sampled} (${s.unknownCount} coverage-bounded UNKNOWN)`);
+  L.push(`- **Accounts running a PROVEN quantum-policy hook:** ${s.provenQuantumHookCount}`);
+  L.push("");
+  L.push("## HNDL exposure breakdown");
+  L.push("| Class | Count | Meaning |");
+  L.push("|---|---|---|");
+  L.push(`| master | ${c.master} | CRITICAL — unrotatable master pubkey on-ledger (irreversible) |`);
+  L.push(`| regular | ${c.regular} | RECOVERABLE — a regular key exposed; rotate it |`);
+  L.push(`| multisig | ${c.multisig} | RECOVERABLE — signer pubkeys exposed; rotate the list |`);
+  L.push(`| none | ${c.none} | hash-only; never signed (conclusive) |`);
+  L.push(`| unknown | ${c.unknown} | coverage-bounded; not provably safe |`);
+  L.push("");
+  L.push("## Grade tiers (config readiness)");
+  L.push(`- BASELINE (LOW): ${s.byGradeTier.LOW} · HARDENED (MEDIUM): ${s.byGradeTier.MEDIUM} · WELL HARDENED (HIGH): ${s.byGradeTier.HIGH}`);
+  L.push("");
+  if (s.topExposedByBalance.length) {
+    L.push("## Top exposed by balance-at-risk");
+    L.push("| Account | Class | XAH at risk | Grade |");
+    L.push("|---|---|---|---|");
+    for (const r of s.topExposedByBalance)
+      L.push(`| ${r.address} | ${r.exposureClass} | ${dropsToXah(r.balanceAtRiskDrops)} | ${r.gradeScore}/100 |`);
+    L.push("");
+  }
+  L.push("_Method: hndl_exposure (pubkey-on-ledger classification, two-sided coverage proof) + quantum_grade (config). Config ≠ reality: an account can have a regular key yet have master-signed (exposed). xahau-mcp._");
+  return L.join("\n");
+}

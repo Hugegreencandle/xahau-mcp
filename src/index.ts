@@ -26,7 +26,7 @@ import { classifyHook } from "./classify.js";
 import { diffHooks } from "./diff.js";
 import { scaffoldHook } from "./scaffold.js";
 import { computeReward } from "./rewards.js";
-import { quantumGrade, hndlExposure } from "./quantum.js";
+import { quantumGrade, hndlExposure, quantumScorecard, renderScorecardMarkdown } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { getAmendmentStatus, predictAmendmentActivation, diffNodeAmendments, checkAmendmentBlocked } from "./amendments.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned, buildRemitUnsigned, buildSetRemarksUnsigned, buildClawbackUnsigned, buildDeepFreezeUnsigned } from "./builders.js";
@@ -34,7 +34,7 @@ import { buildCronSet, listCronJobs, monitorCronHealth } from "./cron.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
-import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, HNDL_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT, AMENDMENT_STATUS_OUT, AMENDMENT_PREDICT_OUT, AMENDMENT_BLOCKED_OUT, AMENDMENT_DIFF_OUT, TRACE_STAKEHOLDERS_OUT, DOUBLE_THREADING_OUT, ACCOUNT_REMARKS_OUT } from "./outputSchemas.js";
+import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, HNDL_OUT, SCORECARD_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT, AMENDMENT_STATUS_OUT, AMENDMENT_PREDICT_OUT, AMENDMENT_BLOCKED_OUT, AMENDMENT_DIFF_OUT, TRACE_STAKEHOLDERS_OUT, DOUBLE_THREADING_OUT, ACCOUNT_REMARKS_OUT } from "./outputSchemas.js";
 import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { diagnoseFailedTx } from "./diagnose.js";
@@ -874,6 +874,23 @@ server.registerTool("quantum_grade", {
 }, async ({ address, network }) => {
   try { const g = await quantumGrade(address, network as Net); return ok(`${address}: ${g.tierLabel} (${g.score}/100) — master key ${g.masterDisabled ? "disabled" : "active (normal)"}`, g); }
   catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("quantum_scorecard", {
+  description: "Network-level Quantum Readiness Scorecard: aggregate HNDL exposure (hndl_exposure) + config grade (quantum_grade) across a SAMPLE of accounts. HONEST SCOPE: a sample of recently-active accounts (or a caller-supplied list), NOT a ledger census — active accounts skew toward exposed, so figures are a sample, not a network %. Reports exposure-class breakdown, balance-at-risk, conclusive-vs-unknown, grade tiers, and top exposed. HEAVY (many RPC reads). Set --markdown for a public-facing report. Read-only.",
+  inputSchema: {
+    network: NET,
+    accounts: z.array(z.string()).optional().describe("explicit account list; omit to sample recently-active accounts"),
+    sampleLedgers: z.number().int().min(1).max(40).optional(), cap: z.number().int().min(1).max(60).optional(),
+    maxPages: z.number().int().min(1).max(15).optional(), markdown: z.boolean().optional(),
+  },
+  outputSchema: SCORECARD_OUT,
+}, async ({ network, accounts, sampleLedgers, cap, maxPages, markdown }) => {
+  try {
+    const s = await quantumScorecard(network as Net, { accounts, sampleLedgers, cap, maxPages });
+    const out = markdown ? { ...s, markdown: renderScorecardMarkdown(s, new Date().toISOString()) } : s;
+    return ok(`${s.network}: ${s.exposedCount}/${s.sampled} exposed (${s.masterExposedCount} master/CRITICAL), ${s.unknownCount} unknown`, out);
+  } catch (e) { return fail((e as Error).message); }
 });
 
 server.registerTool("hndl_exposure", {
