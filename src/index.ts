@@ -868,11 +868,11 @@ server.registerTool("what_if", {
 });
 
 server.registerTool("quantum_grade", {
-  description: "Grade a Xahau account for quantum (HNDL) readiness: master-key-disabled, regular key, multi-sign and installed hooks → 0-100 score + tier + recommendations. Ports the xrpl-audit quantum model to Xahau, with a Hook/PQC dimension. Read-only.",
+  description: "Grade a Xahau account for quantum (HNDL) FUTURE-hardening readiness: master-key-disabled, regular key, multi-sign → 0-100 score + tier + recommendations. Framed as hardening, not a safety alarm (a BASELINE account is normal, not unsafe). Reports installed hooks as informational only — hook presence is NOT scored and does not assert any quantum/key-rotation policy (that requires proving the hook's bytecode). Read-only.",
   inputSchema: { address: z.string().min(25).describe("r-address"), network: NET },
   outputSchema: QUANTUM_OUT,
 }, async ({ address, network }) => {
-  try { const g = await quantumGrade(address, network as Net); return ok(`${address}: ${g.tier} (${g.score}/100) — ${g.masterDisabled ? "master disabled" : "master ENABLED"}`, g); }
+  try { const g = await quantumGrade(address, network as Net); return ok(`${address}: ${g.tierLabel} (${g.score}/100) — master key ${g.masterDisabled ? "disabled" : "active (normal)"}`, g); }
   catch (e) { return fail((e as Error).message); }
 });
 

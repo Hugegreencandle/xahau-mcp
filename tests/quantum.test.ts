@@ -30,4 +30,23 @@ describe("quantum_grade scoring", () => {
     const g = gradeSignals({ masterDisabled: true, hasRegularKey: true, hasMultiSig: true, signerCount: 2 });
     expect(g.recommendations.some((r) => /Hook/.test(r))).toBe(true);
   });
+
+  it("de-alarm: master-active signal is neutral, not alarm language", () => {
+    const g = gradeSignals({ masterDisabled: false, hasRegularKey: false, hasMultiSig: false, signerCount: 0 });
+    const masterSignal = g.signals.find((s) => /master key active/.test(s));
+    expect(masterSignal).toBeTruthy();
+    // no alarm words anywhere in the signals
+    expect(g.signals.join(" ")).not.toMatch(/exposed|ENABLED|vulnerable|at risk|HNDL target/i);
+  });
+
+  it("de-alarm: tierLabel maps to hardening language", () => {
+    expect(gradeSignals({ masterDisabled: false, hasRegularKey: false, hasMultiSig: false, signerCount: 0 }).tierLabel).toBe("BASELINE");
+    expect(gradeSignals({ masterDisabled: true, hasRegularKey: true, hasMultiSig: false, signerCount: 0 }).tierLabel).toBe("HARDENED");
+    expect(gradeSignals({ masterDisabled: true, hasRegularKey: false, hasMultiSig: true, signerCount: 3 }).tierLabel).toBe("WELL HARDENED");
+  });
+
+  it("honesty: Hook recommendation states enforcement is unproven/unscored", () => {
+    const g = gradeSignals({ masterDisabled: true, hasRegularKey: true, hasMultiSig: true, signerCount: 2 });
+    expect(g.recommendations.some((r) => /not scored|proven/.test(r))).toBe(true);
+  });
 });
