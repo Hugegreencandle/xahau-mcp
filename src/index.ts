@@ -868,7 +868,7 @@ server.registerTool("what_if", {
 });
 
 server.registerTool("quantum_grade", {
-  description: "Grade a Xahau account for quantum (HNDL) FUTURE-hardening readiness: master-key-disabled, regular key, multi-sign → 0-100 score + tier + recommendations. Framed as hardening, not a safety alarm (a BASELINE account is normal, not unsafe). Reports installed hooks as informational only — hook presence is NOT scored and does not assert any quantum/key-rotation policy (that requires proving the hook's bytecode). Read-only.",
+  description: "Grade a Xahau account for quantum (HNDL) FUTURE-hardening readiness: master-key-disabled, regular key, multi-sign, and a PROVEN quantum-policy Hook → 0-100 score + tier + recommendations. Framed as hardening, not a safety alarm (a BASELINE account is normal, not unsafe). A hook is credited (+30) ONLY when its exact bytecode (HookHash) matches a registered xahc-prover-PROVEN quantum-policy hook (e.g. qkey_guard / master-disuse); mere hook presence is never scored. Read-only.",
   inputSchema: { address: z.string().min(25).describe("r-address"), network: NET },
   outputSchema: QUANTUM_OUT,
 }, async ({ address, network }) => {

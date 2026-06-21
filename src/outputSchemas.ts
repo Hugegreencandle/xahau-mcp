@@ -50,6 +50,7 @@ export const FIDELITY_OUT = {
 export const QUANTUM_OUT = {
   address: str, score: num, tier: str, tierLabel: str.optional(), masterDisabled: bool, regularKey: z.unknown().optional(),
   signerList: z.unknown().optional(), hooks: z.unknown().optional(), hookPolicyNote: str.optional(),
+  hasProvenQuantumHook: bool.optional(), provenHook: z.unknown().optional(),
   framing: str.optional(), recommendations: arr, ...err,
 };
 

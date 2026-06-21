@@ -45,8 +45,23 @@ describe("quantum_grade scoring", () => {
     expect(gradeSignals({ masterDisabled: true, hasRegularKey: false, hasMultiSig: true, signerCount: 3 }).tierLabel).toBe("WELL HARDENED");
   });
 
-  it("honesty: Hook recommendation states enforcement is unproven/unscored", () => {
+  it("honesty: recommends a proven quantum-policy Hook when absent", () => {
     const g = gradeSignals({ masterDisabled: true, hasRegularKey: true, hasMultiSig: true, signerCount: 2 });
-    expect(g.recommendations.some((r) => /not scored|proven/.test(r))).toBe(true);
+    expect(g.recommendations.some((r) => /PROVEN quantum-policy Hook|qkey_guard/.test(r))).toBe(true);
+  });
+
+  it("step-4: proven quantum hook adds +30 and recommendation drops", () => {
+    const base = gradeSignals({ masterDisabled: false, hasRegularKey: true, hasMultiSig: false, signerCount: 0 });
+    const withHook = gradeSignals({ masterDisabled: false, hasRegularKey: true, hasMultiSig: false, signerCount: 0, hasProvenQuantumHook: true });
+    expect(withHook.score).toBe(base.score + 30);                       // 25 -> 55
+    expect(withHook.tier).toBe("MEDIUM");                                // 55 in [35,70)
+    expect(withHook.signals.some((s) => /PROVEN quantum-policy Hook/.test(s))).toBe(true);
+    expect(withHook.recommendations.some((r) => /qkey_guard/.test(r))).toBe(false); // no longer recommended
+  });
+
+  it("step-4: score caps at 100 with all signals", () => {
+    const g = gradeSignals({ masterDisabled: true, hasRegularKey: true, hasMultiSig: true, signerCount: 3, hasProvenQuantumHook: true });
+    expect(g.score).toBe(100);   // 40+35+25+30 = 130 -> capped 100
+    expect(g.tier).toBe("HIGH");
   });
 });

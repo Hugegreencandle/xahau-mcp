@@ -6,7 +6,28 @@ import { getAccountInfo, getAccountObjects, type Network } from "./rpc.js";
 
 const LSF_DISABLE_MASTER = 0x00100000;
 
-export interface QuantumSignals { masterDisabled: boolean; hasRegularKey: boolean; hasMultiSig: boolean; signerCount: number; }
+export interface QuantumSignals {
+  masterDisabled: boolean; hasRegularKey: boolean; hasMultiSig: boolean; signerCount: number;
+  /** Account runs a Hook whose EXACT bytecode (by HookHash) is a registered, xahc-prover-PROVEN
+   *  quantum-policy hook. Optional; absent => not credited (the honest default). */
+  hasProvenQuantumHook?: boolean;
+}
+
+/**
+ * Registry of quantum-policy Hooks whose bytecode has been PROVEN by xahc-prover.
+ * Key = on-ledger HookHash (SHA-512Half of the hook wasm) — matching it proves the DEPLOYED
+ * bytecode is byte-identical to the proven artifact (HookHash binds to wasm bytes). This is the
+ * only honest way to credit a hook: not "a hook is installed", but "THIS proven hook is installed".
+ */
+export const PROVEN_QUANTUM_HOOKS: Record<string, { name: string; invariant: string; note: string }> = {
+  // qkey_guard — forbids the master key from signing ordinary outgoing txns (master-disuse).
+  // Proven 2026-06-21 (xahc-prover 39th invariant `master-disuse`), adversarially audited.
+  "51285E956F1A611E911D035C3209F5E3B7DAF35BD5A78AF3C7B36F39F8C46596": {
+    name: "qkey_guard",
+    invariant: "master-disuse",
+    note: "PROVEN: master key cannot sign ordinary outgoing txns (forces rotatable-key use). Master is admitted only for key/hook management (brick-safe). Caveat: master-key DISUSE, not compromise defense.",
+  },
+};
 
 /** Hardening-level label for a tier — framed as future-proofing, NOT a present-day safety alarm. */
 const TIER_LABEL: Record<"LOW" | "MEDIUM" | "HIGH", string> = {
@@ -25,11 +46,13 @@ export function gradeSignals(s: QuantumSignals): { score: number; tier: "LOW" | 
   else signals.push("master key active — normal default, not a flaw; disabling it behind a regular key / signer list is the single biggest future-hardening step");
   if (s.hasMultiSig) { score += 35; signals.push(`multi-sign active, ${s.signerCount} signer(s) (+35)`); }
   if (s.hasRegularKey) { score += 25; signals.push("regular key set — master key is rotatable (+25)"); }
+  if (s.hasProvenQuantumHook) { score += 30; signals.push("PROVEN quantum-policy Hook enforced on-ledger — master key cannot sign ordinary txns (+30)"); }
+  if (score > 100) score = 100;  // cap: the four signals can sum past 100; readiness tops out at 100
   const tier = score >= 70 ? "HIGH" : score >= 35 ? "MEDIUM" : "LOW";
   const recommendations: string[] = [];
   if (!s.masterDisabled) recommendations.push("Optional hardening: after configuring a regular key or signer list, disable the master key (lsfDisableMaster) so the primary long-lived key can be retired.");
   if (!s.hasRegularKey && !s.hasMultiSig) recommendations.push("Optional hardening: set a regular key and/or a signer list so the master key can be rotated and then disabled.");
-  recommendations.push("Xahau is on Ripple's post-quantum roadmap; a proven quantum-policy Hook can enforce account-level key-rotation that XRPL accounts cannot — that enforcement is not scored here until the Hook's bytecode is proven.");
+  if (!s.hasProvenQuantumHook) recommendations.push("Strongest Xahau-only hardening: install a PROVEN quantum-policy Hook (e.g. qkey_guard / master-disuse) that forbids the master key from signing ordinary transactions — enforcement XRPL accounts cannot make on-ledger.");
   return { score, tier, tierLabel: TIER_LABEL[tier], signals, recommendations };
 }
 
@@ -47,23 +70,37 @@ export async function quantumGrade(address: string, network: Network) {
   } catch { /* tolerate */ }
 
   let hooksInstalled = 0;
+  let provenHook: { name: string; invariant: string; note: string; hookHash: string } | null = null;
   try {
     const h = await getAccountObjects(address, network, "hook");
     const ho = h.account_objects.find((o: any) => o.LedgerEntryType === "Hook") as any;
-    hooksInstalled = (ho?.Hooks ?? []).length;
+    const hooks = (ho?.Hooks ?? []) as any[];
+    hooksInstalled = hooks.length;
+    // Step-4: credit a PROVEN quantum-policy hook by exact HookHash (binds to proven bytecode).
+    // Each entry may be { Hook: {...} } or flat — mirror explain.ts's `w.Hook ?? w` unwrap.
+    for (const e of hooks) {
+      const hh = String((e?.Hook ?? e)?.HookHash ?? "").toUpperCase();
+      const rec = hh && PROVEN_QUANTUM_HOOKS[hh];
+      if (rec) { provenHook = { ...rec, hookHash: hh }; break; }
+    }
   } catch { /* tolerate */ }
 
-  const { score, tier, tierLabel, signals, recommendations } = gradeSignals({ masterDisabled, hasRegularKey, hasMultiSig, signerCount });
+  const hasProvenQuantumHook = provenHook !== null;
+  const { score, tier, tierLabel, signals, recommendations } =
+    gradeSignals({ masterDisabled, hasRegularKey, hasMultiSig, signerCount, hasProvenQuantumHook });
 
   return {
     address, score, tier, tierLabel, signals,
     masterDisabled, hasRegularKey, hasMultiSig, signerCount, hooksInstalled,
-    // Honest hook dimension: we report that hooks are PRESENT, but presence does NOT imply a
-    // quantum/key-rotation policy and is deliberately NOT scored. Confirming a Hook enforces such
-    // a policy requires proving its bytecode (xahc-prover) — until then this stays informational.
-    hookPolicyNote: hooksInstalled > 0
-      ? `${hooksInstalled} hook(s) installed — presence only; not scored. A hook earns quantum credit only once its bytecode is proven to enforce key-rotation / master-disable policy.`
-      : "no hooks installed.",
+    hasProvenQuantumHook, provenHook,
+    // Honest hook dimension: a hook earns quantum credit ONLY when its exact bytecode (HookHash)
+    // matches a registered, xahc-prover-PROVEN quantum-policy hook. Mere hook PRESENCE is never
+    // scored — presence does not imply a key-rotation policy.
+    hookPolicyNote: provenHook
+      ? `PROVEN quantum-policy hook installed: ${provenHook.name} (invariant ${provenHook.invariant}, HookHash ${provenHook.hookHash.slice(0, 16)}…). Credited +30. ${provenHook.note}`
+      : hooksInstalled > 0
+        ? `${hooksInstalled} hook(s) installed — none match a registered PROVEN quantum-policy hook, so NOT scored. Presence alone earns no credit.`
+        : "no hooks installed.",
     recommendations,
     framing: "FUTURE-hardening readiness, not a present-day safety alarm. ed25519/secp256k1 are not broken today; a BASELINE account is normal, not unsafe. Score reflects how hardened the account is against Harvest-Now-Decrypt-Later.",
     note: "HNDL (Harvest-Now-Decrypt-Later) readiness. Same key model as XRPL. Minimizing long-lived key material (rotate behind a regular key / signer list, then disable master) is the near-term defense.",
