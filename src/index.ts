@@ -26,7 +26,7 @@ import { classifyHook } from "./classify.js";
 import { diffHooks } from "./diff.js";
 import { scaffoldHook } from "./scaffold.js";
 import { computeReward } from "./rewards.js";
-import { quantumGrade, hndlExposure, quantumScorecard, renderScorecardMarkdown } from "./quantum.js";
+import { quantumGrade, hndlExposure, quantumScorecard, renderScorecardMarkdown, configCensus } from "./quantum.js";
 import { governanceState, decodeB2M } from "./governance.js";
 import { getAmendmentStatus, predictAmendmentActivation, diffNodeAmendments, checkAmendmentBlocked } from "./amendments.js";
 import { buildSetHookUnsigned, buildClaimRewardUnsigned, buildPaymentUnsigned, buildImportUnsigned, buildRemitUnsigned, buildSetRemarksUnsigned, buildClawbackUnsigned, buildDeepFreezeUnsigned } from "./builders.js";
@@ -34,7 +34,7 @@ import { buildCronSet, listCronJobs, monitorCronHealth } from "./cron.js";
 import { fidelityReport, type HookCorpus } from "./fidelity.js";
 import { hookExecutionPostmortem } from "./postmortem.js";
 import { scorePayload } from "./scam.js";
-import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, HNDL_OUT, SCORECARD_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT, AMENDMENT_STATUS_OUT, AMENDMENT_PREDICT_OUT, AMENDMENT_BLOCKED_OUT, AMENDMENT_DIFF_OUT, TRACE_STAKEHOLDERS_OUT, DOUBLE_THREADING_OUT, ACCOUNT_REMARKS_OUT } from "./outputSchemas.js";
+import { EXECUTE_HOOK_OUT, ANALYZE_HOOK_OUT, CLASSIFY_HOOK_OUT, HOOK_DIFF_OUT, HOOK_REPORT_OUT, FIDELITY_OUT, QUANTUM_OUT, HNDL_OUT, SCORECARD_OUT, CENSUS_OUT, DECODE_HOOKON_OUT, ENCODE_HOOKON_OUT, DECODE_AMOUNT_OUT, VALIDATE_ADDRESS_OUT, DECODE_SIGNREQ_OUT, DECODE_XPOP_OUT, REWARD_STATUS_OUT, HOST_DIAGNOSTICS_OUT, DIAGNOSE_TX_OUT, SIMULATE_OUT, AMENDMENT_STATUS_OUT, AMENDMENT_PREDICT_OUT, AMENDMENT_BLOCKED_OUT, AMENDMENT_DIFF_OUT, TRACE_STAKEHOLDERS_OUT, DOUBLE_THREADING_OUT, ACCOUNT_REMARKS_OUT } from "./outputSchemas.js";
 import { rewardStatus, GENESIS_ACCOUNT, GENESIS_NAMESPACE } from "./rewardStatus.js";
 import { evernodeHostDiagnostics, EVERNODE_GOVERNOR, EVERNODE_HOOK_NAMESPACE } from "./evernodeHost.js";
 import { diagnoseFailedTx } from "./diagnose.js";
@@ -874,6 +874,17 @@ server.registerTool("quantum_grade", {
 }, async ({ address, network }) => {
   try { const g = await quantumGrade(address, network as Net); return ok(`${address}: ${g.tierLabel} (${g.score}/100) — master key ${g.masterDisabled ? "disabled" : "active (normal)"}`, g); }
   catch (e) { return fail((e as Error).message); }
+});
+
+server.registerTool("quantum_config_census", {
+  description: "WHOLE-LEDGER key-rotation posture census via ledger_data (AccountRoot Flags/RegularKey/Balance) — no per-account tx scan, so figures ARE network statistics. Reports % of accounts AND % of XAH supply with: no rotation path (master active + no regular key), master disabled, regular key set. Measures CONFIG (can the master key be retired?), not exposure (hndl_exposure does that). HEAVY + rate-limited; paced. Read-only.",
+  inputSchema: { network: NET, maxPages: z.number().int().min(1).max(2000).optional(), pageLimit: z.number().int().min(1).max(2048).optional(), delayMs: z.number().int().min(0).max(10000).optional() },
+  outputSchema: CENSUS_OUT,
+}, async ({ network, maxPages, pageLimit, delayMs }) => {
+  try {
+    const c = await configCensus(network as Net, maxPages ?? 400, pageLimit ?? 2048, delayMs ?? 300);
+    return ok(`${c.network}: ${c.accounts} accounts${c.asOfComplete ? "" : " (PARTIAL)"} — ${c.noRotationPct}% no rotation path (${c.noRotationSupplyPct}% of supply), ${c.masterDisabledPct}% master-disabled`, c);
+  } catch (e) { return fail((e as Error).message); }
 });
 
 server.registerTool("quantum_scorecard", {

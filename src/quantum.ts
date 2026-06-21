@@ -429,3 +429,76 @@ export function renderScorecardMarkdown(s: Awaited<ReturnType<typeof quantumScor
   L.push("_Method: hndl_exposure (pubkey-on-ledger classification, two-sided coverage proof) + quantum_grade (config). Config ≠ reality: an account can have a regular key yet have master-signed (exposed). xahau-mcp._");
   return L.join("\n");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG CENSUS — whole-ledger key-rotation posture via ledger_data (AccountRoot
+// Flags/RegularKey/Balance), NO per-account tx scan. Cheap enough to cover the
+// entire ledger, so its figures ARE network statistics (unlike the active-account
+// scorecard sample). Measures CONFIG (can the master key be rotated?), not exposure
+// (has it signed?) — an account with no regular key + master enabled has NO rotation
+// path, so once it transacts its master key is unavoidably exposed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AccountConfig { flags: number; hasRegularKey: boolean; balanceDrops: string; }
+
+/** PURE per-account config classification. noRotation = master enabled AND no regular key. */
+export function classifyAccountConfig(a: AccountConfig) {
+  const masterDisabled = (a.flags & LSF_DISABLE_MASTER) !== 0;
+  const noRotation = !masterDisabled && !a.hasRegularKey;   // can ONLY ever sign with the master key
+  return { masterDisabled, hasRegularKey: a.hasRegularKey, noRotation };
+}
+
+/** PURE aggregation of config across all accounts. */
+export function aggregateConfigCensus(accts: AccountConfig[]) {
+  let masterDisabled = 0, hasRegularKey = 0, noRotation = 0;
+  let totalDrops = "0", noRotationDrops = "0", masterDisabledDrops = "0";
+  for (const a of accts) {
+    const c = classifyAccountConfig(a);
+    totalDrops = addDrops(totalDrops, a.balanceDrops);
+    if (c.masterDisabled) { masterDisabled++; masterDisabledDrops = addDrops(masterDisabledDrops, a.balanceDrops); }
+    if (c.hasRegularKey) hasRegularKey++;
+    if (c.noRotation) { noRotation++; noRotationDrops = addDrops(noRotationDrops, a.balanceDrops); }
+  }
+  const n = accts.length || 1;
+  const pct = (x: number) => Math.round((x / n) * 1000) / 10;
+  const pctDrops = (x: string) => { const t = BigInt(totalDrops || "0"); return t === 0n ? 0 : Math.round((Number(BigInt(x) * 10000n / t)) / 100 * 10) / 10; };
+  return {
+    accounts: accts.length,
+    masterDisabledCount: masterDisabled, masterDisabledPct: pct(masterDisabled),
+    hasRegularKeyCount: hasRegularKey, hasRegularKeyPct: pct(hasRegularKey),
+    noRotationCount: noRotation, noRotationPct: pct(noRotation),
+    totalDrops, noRotationDrops, masterDisabledDrops,
+    noRotationSupplyPct: pctDrops(noRotationDrops), masterDisabledSupplyPct: pctDrops(masterDisabledDrops),
+  };
+}
+
+/** Whole-ledger config census via ledger_data pagination. Bounded by maxPages; reports completeness.
+ *  `delayMs` paces requests to respect public-node rate limits; transient errors get bounded retries. */
+export async function configCensus(network: Network, maxPages = 400, pageLimit = 2048, delayMs = 300) {
+  const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+  const accts: AccountConfig[] = [];
+  let marker: unknown = undefined, pages = 0, complete = true;
+  while (pages < maxPages) {
+    const params: Record<string, unknown> = { ledger_index: "validated", type: "account", limit: pageLimit };
+    if (marker !== undefined) params.marker = marker;
+    let r: { state?: any[]; marker?: unknown } | null = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try { r = await rpc<{ state?: any[]; marker?: unknown }>("ledger_data", params, network); break; }
+      catch (e) { if (attempt === 3) throw e; await sleep(delayMs * (attempt + 2)); }  // backoff on 429/transient
+    }
+    for (const o of r!.state ?? []) {
+      if (o.LedgerEntryType !== "AccountRoot") continue;
+      accts.push({ flags: Number(o.Flags ?? 0), hasRegularKey: Boolean(o.RegularKey), balanceDrops: String(o.Balance ?? "0") });
+    }
+    pages++; marker = r!.marker;
+    if (marker === undefined || marker === null) break;
+    if (pages >= maxPages) { complete = false; break; }
+    await sleep(delayMs);
+  }
+  return {
+    network, asOfComplete: complete, pagesScanned: pages,
+    caveat: "CONFIG census (key-rotation posture) over the WHOLE account set via ledger_data — these ARE network figures. Measures whether an account CAN rotate off its master key (regular key / master-disabled), NOT whether it has already exposed a key (that is hndl_exposure). Signer-list multisig is not counted here (separate ledger object), so 'hardened' is a slight under-count." +
+      (complete ? "" : " INCOMPLETE: hit the page bound — raise maxPages for a full census."),
+    ...aggregateConfigCensus(accts),
+  };
+}

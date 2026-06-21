@@ -71,6 +71,13 @@ export const SCORECARD_OUT = {
   topExposedByBalance: z.unknown(), rows: z.unknown(), markdown: str.optional(), ...err,
 };
 
+export const CENSUS_OUT = {
+  network: str, asOfComplete: bool, pagesScanned: num, caveat: str, accounts: num,
+  masterDisabledCount: num, masterDisabledPct: num, hasRegularKeyCount: num, hasRegularKeyPct: num,
+  noRotationCount: num, noRotationPct: num, totalDrops: str, noRotationDrops: str, masterDisabledDrops: str,
+  noRotationSupplyPct: num, masterDisabledSupplyPct: num, ...err,
+};
+
 export const DECODE_HOOKON_OUT = { firesOn: arr, count: num, hookOn: str, ...err };
 export const ENCODE_HOOKON_OUT = { hookOn: str, firesOn: arr, ...err };
 

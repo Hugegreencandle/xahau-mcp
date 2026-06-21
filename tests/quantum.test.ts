@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { gradeSignals, classifyHndl, accountIdFromPubkey, assessCoverage, aggregateScorecard } from "../src/quantum.js";
+import { gradeSignals, classifyHndl, accountIdFromPubkey, assessCoverage, aggregateScorecard, classifyAccountConfig, aggregateConfigCensus } from "../src/quantum.js";
 import type { ScorecardRow } from "../src/quantum.js";
 
 describe("quantum_grade scoring", () => {
@@ -203,5 +203,27 @@ describe("quantum scorecard aggregation", () => {
     ]);
     expect(a.exposedPct).toBe(50);
     expect(a.masterExposedPct).toBe(50);
+  });
+});
+
+describe("config census aggregation", () => {
+  it("classifyAccountConfig: noRotation = master enabled AND no regular key", () => {
+    expect(classifyAccountConfig({ flags: 0, hasRegularKey: false, balanceDrops: "0" }).noRotation).toBe(true);
+    expect(classifyAccountConfig({ flags: 0, hasRegularKey: true, balanceDrops: "0" }).noRotation).toBe(false);
+    expect(classifyAccountConfig({ flags: 0x00100000, hasRegularKey: false, balanceDrops: "0" }).noRotation).toBe(false); // master disabled
+    expect(classifyAccountConfig({ flags: 0x00100000, hasRegularKey: false, balanceDrops: "0" }).masterDisabled).toBe(true);
+  });
+
+  it("aggregateConfigCensus: counts + supply % (BigInt)", () => {
+    const a = aggregateConfigCensus([
+      { flags: 0, hasRegularKey: false, balanceDrops: "9000000" },          // noRotation, 9 XAH
+      { flags: 0x00100000, hasRegularKey: false, balanceDrops: "1000000" }, // master disabled, 1 XAH
+    ]);
+    expect(a.accounts).toBe(2);
+    expect(a.noRotationCount).toBe(1);
+    expect(a.masterDisabledCount).toBe(1);
+    expect(a.noRotationPct).toBe(50);
+    expect(a.totalDrops).toBe("10000000");
+    expect(a.noRotationSupplyPct).toBe(90);   // 9 of 10 XAH
   });
 });
