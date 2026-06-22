@@ -1,21 +1,7 @@
 {
- "_note": "Read-only JSON-RPC over HTTPS. Failover in listed order. Verified reachable 2026-06-09.",
- "mainnet": {
-  "network_id": 21337,
-  "rpc": [
-   "https://xahau.network"
-  ],
-  "wss": [
-   "wss://xahau.network"
-  ]
- },
- "testnet": {
-  "network_id": 21338,
-  "rpc": [
-   "https://xahau-test.net"
-  ],
-  "wss": [
-   "wss://xahau-test.net"
-  ]
- }
+ "_note": "Read-only JSON-RPC over HTTPS. Failover in listed order. Xahau + XRPL.",
+ "mainnet": { "network_id": 21337, "rpc": ["https://xahau.network"], "wss": ["wss://xahau.network"] },
+ "testnet": { "network_id": 21338, "rpc": ["https://xahau-test.net"], "wss": ["wss://xahau-test.net"] },
+ "xrpl": { "network_id": 0, "rpc": ["https://s1.ripple.com:51234", "https://xrplcluster.com"], "wss": ["wss://xrplcluster.com"] },
+ "xrpl-test": { "network_id": 1, "rpc": ["https://s.altnet.rippletest.net:51234"], "wss": ["wss://s.altnet.rippletest.net:51233"] }
 }

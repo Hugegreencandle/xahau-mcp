@@ -42,13 +42,15 @@ interface ErrorCodes {
 }
 const ERR: ErrorCodes = DEFS_AVAILABLE ? load<ErrorCodes>("error-codes.json") : { results: {} };
 
-export interface Endpoints {
-  mainnet: { network_id: number; rpc: string[]; wss: string[] };
-  testnet: { network_id: number; rpc: string[]; wss: string[] };
-}
+export type Endpoints = Record<string, { network_id: number; rpc: string[]; wss: string[] }>;
 export const ENDPOINTS: Endpoints = has("endpoints.json")
   ? load<Endpoints>("endpoints.json")
-  : { mainnet: { network_id: 21337, rpc: ["https://xahau.network"], wss: [] }, testnet: { network_id: 21338, rpc: ["https://xahau-test.net"], wss: [] } };
+  : {
+      mainnet: { network_id: 21337, rpc: ["https://xahau.network"], wss: [] },        // Xahau mainnet
+      testnet: { network_id: 21338, rpc: ["https://xahau-test.net"], wss: [] },       // Xahau testnet
+      xrpl: { network_id: 0, rpc: ["https://s1.ripple.com:51234"], wss: [] },         // XRP Ledger mainnet
+      "xrpl-test": { network_id: 1, rpc: ["https://s.altnet.rippletest.net:51234"], wss: [] }, // XRPL testnet
+    };
 
 export interface Governance {
   genesisAccount: string;

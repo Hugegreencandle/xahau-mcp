@@ -3,7 +3,7 @@
 // it exposes only read methods. There is deliberately no `submit`/`sign` here.
 import { ENDPOINTS } from "./defs.js";
 
-export type Network = "mainnet" | "testnet";
+export type Network = "mainnet" | "testnet" | "xrpl" | "xrpl-test";
 
 export class RpcError extends Error {}
 
@@ -13,7 +13,9 @@ const TIMEOUT_MS = 8000;
 
 /** Operator override: XAHAU_RPC_URLS / XAHAU_TEST_RPC_URLS (comma-separated) take priority for failover. */
 function nodesFor(network: Network): string[] {
-  const env = network === "mainnet" ? process.env.XAHAU_RPC_URLS : process.env.XAHAU_TEST_RPC_URLS;
+  const env = network === "mainnet" ? process.env.XAHAU_RPC_URLS
+            : network === "testnet" ? process.env.XAHAU_TEST_RPC_URLS
+            : undefined; // XRPL networks: no Xahau env override
   const override = (env ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return [...override, ...ENDPOINTS[network].rpc.filter((u) => !override.includes(u))];
 }

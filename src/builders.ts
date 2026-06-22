@@ -10,7 +10,10 @@ const SIGNING_INSTRUCTIONS =
   "This transaction is UNSIGNED. Sign it OFFLINE with your own key — e.g. via the xaman (Xumm) app, or xrpl-accountlib `sign()` in a secure local environment — then submit. NEVER paste a secret/seed into this tool or any prompt. Verify NetworkID, Account, Fee, Sequence and LastLedgerSequence before signing.";
 
 function base(account: string, network: Network) {
-  return { Account: account, NetworkID: ENDPOINTS[network].network_id };
+  // NetworkID is REQUIRED for networks with id >= 1024 (Xahau 21337/21338) and FORBIDDEN for
+  // networks below it (XRPL mainnet 0, testnet 1) — including it there gets the tx rejected.
+  const nid = ENDPOINTS[network].network_id;
+  return nid >= 1024 ? { Account: account, NetworkID: nid } : { Account: account };
 }
 
 export interface BuildResult {
