@@ -527,16 +527,23 @@ export async function disableMasterReadiness(address: string, network: Network, 
   const rkv = regularKey ? validateAddress(regularKey) : null;
   const regularKeyAccountId = rkv && rkv.valid && "accountId" in rkv ? (rkv as { accountId: string }).accountId : null;
 
-  // Signer list: existence is NOT enough — read its quorum + weights to confirm it's REACHABLE.
-  let signerListSet = false, signerListReachable = false;
+  // Signer list: existence is NOT enough — read its quorum + per-member weights. We need the CURRENT
+  // member set (not just the total) so a historical multi-sign can be tied to the list that controls
+  // the account NOW (a past list the account has since rotated away from is not proof — see below).
+  let signerListSet = false, signerListReachable = false, signerQuorum = 0;
+  const currentSigners = new Map<string, number>();   // current member AccountID -> SignerWeight
   try {
     const objs = await getAccountObjects(address, network, "signer_list");
     const sl = objs.account_objects.find((o: any) => o.LedgerEntryType === "SignerList") as any;
     if (sl) {
       signerListSet = true;
-      const quorum = Number(sl.SignerQuorum ?? 0);
-      const totalWeight = (sl.SignerEntries ?? []).reduce((n: number, e: any) => n + Number(e?.SignerEntry?.SignerWeight ?? 0), 0);
-      signerListReachable = quorum > 0 && totalWeight >= quorum;
+      signerQuorum = Number(sl.SignerQuorum ?? 0);
+      for (const e of sl.SignerEntries ?? []) {
+        const acc = e?.SignerEntry?.Account;
+        if (typeof acc === "string") currentSigners.set(acc, Number(e?.SignerEntry?.SignerWeight ?? 0));
+      }
+      const totalWeight = [...currentSigners.values()].reduce((n, w) => n + w, 0);
+      signerListReachable = signerQuorum > 0 && totalWeight >= signerQuorum;
     }
   } catch { /* tolerate — leaves signerListSet=false => conservative */ }
 
@@ -552,8 +559,17 @@ export async function disableMasterReadiness(address: string, network: Network, 
         const tx = (t.tx ?? t.tx_json ?? t) as Record<string, any>;
         if (tx.Account !== address) continue;
         const spk = typeof tx.SigningPubKey === "string" ? tx.SigningPubKey : "";
-        if (spk === "" && Array.isArray(tx.Signers) && tx.Signers.length > 0) multisigHasSigned = true;
-        else if (spk && regularKeyAccountId && accountIdFromPubkey(spk) === regularKeyAccountId) regularKeyHasSigned = true;
+        if (spk === "" && Array.isArray(tx.Signers) && tx.Signers.length > 0) {
+          // H-1 fix: a past multi-sign is proof ONLY if it was signed by signers who are CURRENT
+          // members of the live SignerList AND their summed CURRENT weights reach the CURRENT quorum.
+          // Otherwise the account multi-signed with a list it has since rotated away from — disabling
+          // master would brick it (the new, untested list is the only signer). Subset + quorum check:
+          const accts = (tx.Signers as any[]).map((s) => s?.Signer?.Account).filter((x): x is string => typeof x === "string");
+          if (accts.length > 0 && signerQuorum > 0 && accts.every((acc) => currentSigners.has(acc))) {
+            const w = accts.reduce((n, acc) => n + (currentSigners.get(acc) ?? 0), 0);
+            if (w >= signerQuorum) multisigHasSigned = true;
+          }
+        } else if (spk && regularKeyAccountId && accountIdFromPubkey(spk) === regularKeyAccountId) regularKeyHasSigned = true;
       }
       pages++; marker = r.marker; if (marker == null) break;
     }
@@ -569,7 +585,7 @@ export async function disableMasterReadiness(address: string, network: Network, 
   if (!regularKey && !signerListSet) reasons.push("no regular key and no signer list — the master key is the ONLY signer; disabling it WILL brick the account");
   if (regularKey && !regularKeyHasSigned) reasons.push("a regular key is set but has NOT been seen signing — UNVERIFIED. Send a test tx signed by it first.");
   if (signerListSet && !signerListReachable) reasons.push("a signer list exists but its quorum is UNREACHABLE (quorum > total signer weight) — it cannot sign; disabling master would brick the account");
-  if (signerListSet && signerListReachable && !multisigHasSigned) reasons.push("a signer list is reachable but no multi-signed tx was seen — UNVERIFIED. Send a test multi-signed tx first.");
+  if (signerListSet && signerListReachable && !multisigHasSigned) reasons.push("a signer list is reachable but no multi-signed tx FROM THE CURRENT SIGNERS (reaching quorum) was seen — UNVERIFIED. A past multi-sign with a now-replaced list does NOT count. Send a fresh multi-signed test tx with the current list first.");
   if (regularKeyHasSigned) reasons.push("the configured regular key has signed for this account (PROVEN alternative)");
   if (signerListProven) reasons.push("the signer list is reachable and has multi-signed (PROVEN alternative)");
   reasons.push("note: 'has signed' proves the key worked historically, not that you still hold it — confirm you control the alternative signer NOW.");
