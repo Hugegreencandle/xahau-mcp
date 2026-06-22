@@ -372,6 +372,20 @@ export function buildSetRegularKeyUnsigned(input: { account: string; regularKey?
   };
 }
 
+/** AccountSet no-op — a valid transaction that changes nothing and moves no funds (only the fee).
+ *  Its only purpose is to be SIGNED, so a user can prove a key (e.g. a freshly-set regular key) can
+ *  actually sign for the account before retiring the master key. (A self-payment can't be used — an
+ *  XRP payment to self is temREDUNDANT.) */
+export function buildAccountSetNoopUnsigned(input: { account: string; network?: Network }): BuildResult {
+  const network = input.network ?? "testnet";
+  if (!validateAddress(input.account).valid) throw new Error("account is not a valid r-address");
+  return {
+    unsignedTx: { TransactionType: "AccountSet", ...base(input.account, network) },
+    network, signingInstructions: SIGNING_INSTRUCTIONS,
+    warning: "Sign this with the key you want to PROVE controls the account (e.g. your new regular key) — not the master key.",
+  };
+}
+
 /** AccountSet asfDisableMaster — retire the master key. IRREVERSIBLE except via the regular key /
  *  signer list you set first. Pass a readiness assessment to gate it (blocked unless safe). */
 const ASF_DISABLE_MASTER = 4;
