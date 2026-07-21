@@ -29,31 +29,28 @@ export interface OnChainHookExecution {
 }
 
 /**
- * EMPIRICAL HookResult -> accept/rollback MAPPING.
+ * HookResult -> accept/rollback MAPPING (ground truth: xahaud, not empirical guess).
  *
- * Determined from real Xahau mainnet data (read-only `tx` lookups of transactions whose meta carry
- * HookExecutions):
- *  - The committed genesis-reward regression fixture (tests/regression.test.ts): a ClaimReward that
- *    SUCCEEDED on chain carries HookExecution.HookResult = 3, and the reward hook's only exit path is
- *    accept(). => HookResult 3 == ACCEPT.
- *  - A transaction whose engine result is tecHOOK_REJECTED (code 153) is one where a hook called
- *    rollback(); its HookExecution carries HookResult = 4. => HookResult 4 == ROLLBACK.
+ * sfHookResult on a HookExecution IS the hook's exit type, written verbatim in
+ * applyHook.cpp:1568  `meta.setFieldU8(sfHookResult, static_cast<uint8_t>(hookResult.exitType));`
+ * where `hook_api::ExitType` (include/xrpl/hook/Enum.h:390) is:
+ *    WASM_ERROR = 1  (hook trapped / guard violation — treated as rollback by consensus)
+ *    ROLLBACK   = 2  (hook called rollback())
+ *    ACCEPT     = 3  (hook called accept())
+ * (Confirmed by xahaud's own SetHook_test.cpp: sfHookResult == 3 on an accept.)
  *
- * These are the xahaud `hook_api::ExitType` values surfaced into metadata:
- *    ROLLBACK = 0  (hook errored / wasm trap / guard violation — treated as rollback by consensus)
- *    ACCEPT   = 3  (hook called accept())
- *    REJECT   = 4  (hook called rollback())
- * We map exit-type 3 -> accept and exit-types 0/4 -> rollback. Anything else (unexpected) -> unknown
- * so we never silently mis-score. Callers may instead/also pass engineResult; tesSUCCESS with a hook
- * present corroborates accept, tecHOOK_REJECTED corroborates rollback.
+ * We map 3 -> accept, and 1 or 2 -> rollback. Anything else (incl. 0/UNSET and the phantom 4 the
+ * prior version used) -> unknown, so we never silently mis-score. Callers may instead/also pass
+ * engineResult; tesSUCCESS with a hook present corroborates accept, tecHOOK_REJECTED corroborates
+ * rollback. (Corrected 2026-07-22: the old map used ROLLBACK=0/REJECT=4, which are not ExitType values.)
  */
 export function onChainResult(he: OnChainHookExecution): { decision: "accept" | "rollback" | null; via: string } {
   const r = he.HookResult;
   if (r !== undefined && r !== null) {
     const n = typeof r === "string" ? Number(r) : r;
     if (n === 3) return { decision: "accept", via: "HookResult=3 (ACCEPT)" };
-    if (n === 4) return { decision: "rollback", via: "HookResult=4 (ROLLBACK/reject)" };
-    if (n === 0) return { decision: "rollback", via: "HookResult=0 (ROLLBACK/error)" };
+    if (n === 2) return { decision: "rollback", via: "HookResult=2 (ROLLBACK)" };
+    if (n === 1) return { decision: "rollback", via: "HookResult=1 (WASM_ERROR → rollback)" };
   }
   // fall back to the engine result if the explorer gave us one
   const eng = he.engineResult;

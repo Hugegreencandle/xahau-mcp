@@ -64,16 +64,21 @@ describe("fidelity: reconstructContext (sto round-trip from real tx JSON)", () =
   });
 });
 
-describe("fidelity: onChainResult mapping (empirically determined)", () => {
+describe("fidelity: onChainResult mapping (xahaud ExitType ground truth)", () => {
+  // ExitType (Enum.h): WASM_ERROR=1, ROLLBACK=2, ACCEPT=3. sfHookResult == exitType (applyHook.cpp:1568).
   it("HookResult=3 => accept", () => {
     expect(onChainResult({ HookResult: 3 }).decision).toBe("accept");
     expect(onChainResult({ HookResult: "3" }).decision).toBe("accept");
   });
-  it("HookResult=4 => rollback (reject)", () => {
-    expect(onChainResult({ HookResult: 4 }).decision).toBe("rollback");
+  it("HookResult=2 => rollback (ROLLBACK, rollback() call)", () => {
+    expect(onChainResult({ HookResult: 2 }).decision).toBe("rollback");
+    expect(onChainResult({ HookResult: "2" }).decision).toBe("rollback");
   });
-  it("HookResult=0 => rollback (error)", () => {
-    expect(onChainResult({ HookResult: 0 }).decision).toBe("rollback");
+  it("HookResult=1 => rollback (WASM_ERROR / trap / guard)", () => {
+    expect(onChainResult({ HookResult: 1 }).decision).toBe("rollback");
+  });
+  it("HookResult=4 (phantom, not a valid ExitType) => null, never mis-scored", () => {
+    expect(onChainResult({ HookResult: 4 }).decision).toBeNull();
   });
   it("engineResult fallback when HookResult absent", () => {
     expect(onChainResult({ engineResult: "tesSUCCESS" }).decision).toBe("accept");
@@ -99,7 +104,7 @@ describe("fidelity: compareToOnChain (mapping + degraded exclusion)", () => {
   });
 
   it("scores agree:false when VM accept disagrees with on-chain rollback", () => {
-    const c = compareToOnChain(nonDegradedAccept, { HookResult: 4 });
+    const c = compareToOnChain(nonDegradedAccept, { HookResult: 2 });  // 2 = ROLLBACK (ExitType)
     expect(c.agree).toBe(false);
   });
 
@@ -151,7 +156,7 @@ describe("fidelity: runFidelityCase over a REAL mainnet hook fixture", () => {
     const res = runFidelityCase({
       tx: { TransactionType: "ClaimReward", Account: ACCOUNT_R, ledger_index: 23_478_900 },
       createCodeHex: loadHex("genesis-reward"),
-      hookExecution: { HookResult: 4 },
+      hookExecution: { HookResult: 2 },  // 2 = ROLLBACK (ExitType)
       hookAccountId: "00".repeat(20),
       keyletBlobs: claimerRootAbsent(),
     });

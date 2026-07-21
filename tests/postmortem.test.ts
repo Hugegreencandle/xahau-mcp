@@ -145,7 +145,7 @@ describe("postmortem: rollback / engine-result propagation (synthesized from rea
     const base = liveTxFromCase(cs);
     const meta = base.meta as Record<string, unknown>;
     const hes = (meta.HookExecutions as { HookExecution: Record<string, unknown> }[]).map((w) => ({
-      HookExecution: { ...w.HookExecution, HookResult: 4, HookReturnString: Buffer.from("rejected", "utf-8").toString("hex") },
+      HookExecution: { ...w.HookExecution, HookResult: 2, HookReturnString: Buffer.from("rejected", "utf-8").toString("hex") },
     }));
     return { hash, tx: { ...base, hash, meta: { TransactionResult: "tecHOOK_REJECTED", HookExecutions: hes } } };
   }
