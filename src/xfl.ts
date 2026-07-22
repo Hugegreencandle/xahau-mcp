@@ -80,7 +80,9 @@ export function floatCmp(xa: bigint, xb: bigint): number {
   return a.sign < 0 ? -mag : mag; // for negatives, larger magnitude = smaller value
 }
 
-/** float_compare(a,b,mode) — mode flags: 1=LT, 2=GT (combine for LTE/GTE etc.). Returns 1/0. */
+/** float_compare(a,b,mode) — mode flags (hookapi.h, ground truth): COMPARE_EQUAL=1, COMPARE_LESS=2,
+ *  COMPARE_GREATER=4 (combine for LTE/GTE). Returns 1/0. NOT 1=LT/2=GT — that is the common-but-wrong
+ *  assumption (see the constants + note in the body). */
 export function floatCompare(xa: bigint, xb: bigint, mode: number): bigint {
   const c = floatCmp(xa, xb); // -1,0,1
   // VERIFIED against hooks-rs c/hookapi.h: COMPARE_EQUAL=1, COMPARE_LESS=2, COMPARE_GREATER=4.
