@@ -60,6 +60,35 @@ describe("STAmount <-> XFL (slot_float / float_sto)", () => {
     expect(stAmountToXfl(b)).toBe(xfl);
     expect(decode(stAmountToXfl(b)!).mant).toBe(7_000_000_000_000_000n);
   });
+
+  // RED-TEAM for the IOU float_sto_set path (@xrpl_mworks feature): a WRONG parse would feed a hook a
+  // wrong amount => wrong accept/rollback verdict. Every case must either round-trip EXACTLY or fail
+  // CLOSED (null => NOT_AN_AMOUNT) — never return a plausible-but-wrong value.
+  it("stAmountToXfl round-trips issued amounts across magnitudes + preserves the issuer/currency length", () => {
+    const cur = new Uint8Array(20).fill(0xAB), iss = new Uint8Array(20).fill(0xCD);
+    for (const x of [floatSet(0, 1n), floatSet(3, 999n), floatSet(-6, 123456n), floatSet(12, 5n)]) {
+      const b = xflToStAmountBytes(x, cur, iss)!;
+      expect(b.length).toBe(48);
+      expect(b[0]! & 0x80).toBe(0x80);            // not-XRP bit set on an issued amount
+      expect(stAmountToXfl(b)).toBe(x);           // exact round-trip, no drift
+    }
+  });
+  it("stAmountToXfl round-trips native drops (value in XAH = drops*1e-6, matching float_sto)", () => {
+    for (const drops of [1n, 10n, 1_000_000n, 999_999_999n]) {
+      const b = xflToStAmountBytes(floatSet(-6, drops))!;   // native encode
+      expect(b.length).toBe(8);
+      expect(floatInt(stAmountToXfl(b)!, 6, false)).toBe(drops); // parse -> XFL -> back to drops, exact
+    }
+  });
+  it("FAILS CLOSED (null, never a wrong value) on malformed / non-amount buffers", () => {
+    expect(stAmountToXfl(new Uint8Array(7))).toBeNull();            // too short
+    expect(stAmountToXfl(new Uint8Array(9))).toBeNull();            // not 8 or 48
+    expect(stAmountToXfl(new Uint8Array(47))).toBeNull();           // issued flag range but short
+    const negNative = new Uint8Array(8);                            // native with the positive bit CLEAR
+    expect(stAmountToXfl(negNative)).toBeNull();                    // 0x00.. => invalid native (not 0x40..)
+    const shortIssued = new Uint8Array(40); shortIssued[0] = 0x80;  // not-XRP set but only 40 bytes
+    expect(stAmountToXfl(shortIssued)).toBeNull();
+  });
 });
 
 describe("state key padding — real genesis reward hook", () => {
