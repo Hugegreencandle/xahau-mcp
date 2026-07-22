@@ -13,6 +13,13 @@ describe("XFL float", () => {
     }
   });
 
+  it("float_exponent returns the normalized base-10 exponent (0 for zero)", () => {
+    // floatSet(0, 7) normalizes 7 -> mantissa 7e15, exponent -15 ; value = 7e15 * 10^-15 = 7.
+    expect(xfl.floatExponent(xfl.floatSet(0, 7n))).toBe(-15n);
+    expect(xfl.floatExponent(0n)).toBe(0n);
+    expect(xfl.floatExponent(xfl.FLOAT_ONE)).toBe(-15n); // 1 = 1e15 * 10^-15
+  });
+
   it("float_int error paths: negative w/ absolute=0 => CANT_RETURN_NEGATIVE, dp>15 => INVALID_ARGUMENT", () => {
     const negFive = xfl.floatSet(0, -5n);
     expect(xfl.floatInt(negFive, 0, false)).toBe(-33n); // CANT_RETURN_NEGATIVE — not a negative result

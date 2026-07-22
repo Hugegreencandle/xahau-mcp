@@ -99,6 +99,8 @@ export function floatNegate(x: bigint): bigint {
 }
 export function floatMantissa(x: bigint): bigint { return decode(x).mant; }
 export function floatSign(x: bigint): bigint { const f = decode(x); return f.zero ? 0n : f.sign < 0 ? 1n : 0n; }
+/** float_exponent(xfl) -> the base-10 exponent (real, un-biased); 0 for canonical zero. */
+export function floatExponent(x: bigint): bigint { return BigInt(decode(x).exp); }
 
 export function floatSum(xa: bigint, xb: bigint): bigint {
   const a = decode(xa), b = decode(xb);

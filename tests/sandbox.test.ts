@@ -101,3 +101,15 @@ describe("Hook VM read-side TOO_SMALL semantics (audit HIGH regression)", () => 
     expect(r.exit).toBe("rollback");
   });
 });
+
+// IOU / issued-currency amount support (float_sto_set) — feature requested by @xrpl_mworks (Meister),
+// 2026-07-22. Before wiring, a hook reading an issued Amount as a float hit NOT_IMPLEMENTED and degraded.
+describe("float_sto_set — issued/IOU amount read (requested by @xrpl_mworks)", () => {
+  it("is a SUPPORTED host fn (not NOT_IMPLEMENTED / not degraded on the call itself)", () => {
+    // buildReadFieldHook calls float_sto_set(0, 48, ...); the JS impl uses (rp=0, rl=48).
+    const r = runHook(buildReadFieldHook("float_sto_set", 48, 0, 0), { txType: "Payment" });
+    expect(r.unsupportedCalls).not.toContain("float_sto_set"); // wired, not faked
+    // ptr 0 in fresh memory is zeroed = not a valid STAmount → NOT_AN_AMOUNT (<0) → the hook rolls back
+    expect(r.exit).toBe("rollback");
+  });
+});
