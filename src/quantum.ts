@@ -56,27 +56,27 @@ export function classifyHndl(rAddress: string, accountIdHex: string, txs: Signed
 
 export interface QuantumSignals {
   masterDisabled: boolean; hasRegularKey: boolean; hasMultiSig: boolean; signerCount: number;
-  /** Account runs a Hook whose EXACT bytecode (by HookHash) is a registered, xahc-prover-PROVEN
+  /** Account runs a Hook whose EXACT bytecode (by HookHash) is a registered, formally proven
    *  quantum-policy hook. Optional; absent => not credited (the honest default). */
   hasProvenQuantumHook?: boolean;
 }
 
 /**
- * Registry of quantum-policy Hooks whose bytecode has been PROVEN by xahc-prover.
+ * Registry of quantum-policy Hooks whose bytecode has been formally proven.
  * Key = on-ledger HookHash (SHA-512Half of the hook wasm) — matching it proves the DEPLOYED
  * bytecode is byte-identical to the proven artifact (HookHash binds to wasm bytes). This is the
  * only honest way to credit a hook: not "a hook is installed", but "THIS proven hook is installed".
  */
 export const PROVEN_QUANTUM_HOOKS: Record<string, { name: string; invariant: string; note: string }> = {
-  // qkey_guard — forbids the master key from signing ordinary outgoing txns (master-disuse).
-  // Proven 2026-06-21 (xahc-prover 39th invariant `master-disuse`), adversarially audited.
+  // qkey_guard — forbids the master key from signing ordinary outgoing txns.
+  // Formally proven 2026-06-21 and adversarially audited.
   "51285E956F1A611E911D035C3209F5E3B7DAF35BD5A78AF3C7B36F39F8C46596": {
     name: "qkey_guard",
     invariant: "master-disuse",
     note: "PROVEN: master key cannot sign ordinary outgoing txns (forces rotatable-key use). Master is admitted only for key/hook management (brick-safe). Caveat: master-key DISUSE, not compromise defense.",
   },
   // qday_vault — Q-Day recovery freeze: every outgoing tx requires the committed quantum-safe preimage.
-  // Proven 2026-06-21 (xahc-prover 40th invariant `qday-freeze`), under SHA-512Half collision-resistance.
+  // Formally proven 2026-06-21, under SHA-512Half collision-resistance.
   "D1609B6E24EC3F29296FDB0071068273DBDA0428B6F13FDB6FEF71AC6FB9478F": {
     name: "qday_vault",
     invariant: "qday-freeze",
@@ -149,7 +149,7 @@ export async function quantumGrade(address: string, network: Network) {
     masterDisabled, hasRegularKey, hasMultiSig, signerCount, hooksInstalled,
     hasProvenQuantumHook, provenHook,
     // Honest hook dimension: a hook earns quantum credit ONLY when its exact bytecode (HookHash)
-    // matches a registered, xahc-prover-PROVEN quantum-policy hook. Mere hook PRESENCE is never
+    // matches a registered, formally proven quantum-policy hook. Mere hook PRESENCE is never
     // scored — presence does not imply a key-rotation policy.
     hookPolicyNote: provenHook
       ? `PROVEN quantum-policy hook installed: ${provenHook.name} (invariant ${provenHook.invariant}, HookHash ${provenHook.hookHash.slice(0, 16)}…). Credited +30. ${provenHook.note}`

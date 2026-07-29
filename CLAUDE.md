@@ -5,10 +5,9 @@ real hook bytecode against live (or historical) ledger state in a local VM. Seco
 trifecta: **xahc (write) → xahau-mcp (simulate one) → xahc-prover (prove all)**.
 
 ## Reference docs (read before Xahau protocol questions — don't guess from training)
-- `~/Desktop/xahc-prover/docs/XAHAU-DEV-REFERENCE.md` — host fns, return codes, sfcodes, SetHook,
-  **TSH weak/strong table** (maps directly onto `simulate.ts` TSH logic), amendments.
-- `~/Desktop/xahc-prover/docs/XAHAU-RESOURCES.md` — repos/tools/libs.
-- Ground truth for VM/transactor behaviour: `Xahau/xahaud` (`Transactor.cpp`, `applyHook.cpp`).
+- Ground truth for VM/transactor behaviour: `Xahau/xahaud` (`Transactor.cpp`, `applyHook.cpp`) —
+  host fns, return codes, sfcodes, SetHook, the TSH weak/strong table (which maps directly onto
+  `simulate.ts` TSH logic), amendments.
   `docs/FIDELITY.md` records the VM's measured agreement.
 
 ## What it does
@@ -32,7 +31,6 @@ npm run start         # stdio MCP (dist/index.js)
 npm run http          # HTTP server (dist/http.js)
 npm run fetch:all     # refresh server_definitions + hook-api from a live node (run when protocol moves)
 ```
-- Deployed via **Railway**, integrated into Kairo Vault (live — the deploy is real).
 - `validate_termination.cjs` is a one-off testnet script (uses `xrpl-accountlib` + `xrpl-client`,
   holds a throwaway faucet secret — keep it untracked).
 

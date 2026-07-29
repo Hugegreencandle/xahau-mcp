@@ -414,7 +414,7 @@ server.registerTool("scam_check", {
   } catch (e) { return fail((e as Error).message); }
 });
 
-/* ===================== Tier C — Hook intelligence (the moat, offline) ===================== */
+/* ===================== Tier C — Hook intelligence (offline) ===================== */
 
 // 128 KiB byte ceiling (see MAX_WASM_BYTES in sandbox.ts) → 256 Ki hex chars / ~180 K base64 chars.
 const WASM_IN = {
@@ -441,7 +441,7 @@ server.registerTool("inspect_hook_wasm", {
 });
 
 server.registerTool("analyze_hook", {
-  description: "THE MOAT: run the Hook static-analysis / security rule engine over a CreateCode WASM (+ optional SetHook params) and return SARIF-lite findings. The first Hooks-specific analyzer. Offline.",
+  description: "Run the Hook static-analysis / security rule engine over a CreateCode WASM (+ optional SetHook params) and return SARIF-lite findings. Offline.",
   inputSchema: {
     ...WASM_IN,
     hookOn: z.string().optional(), namespace: z.string().optional(),
@@ -868,7 +868,7 @@ server.registerTool("what_if", {
 });
 
 server.registerTool("quantum_grade", {
-  description: "Grade a Xahau account for quantum (HNDL) FUTURE-hardening readiness: master-key-disabled, regular key, multi-sign, and a PROVEN quantum-policy Hook → 0-100 score + tier + recommendations. Framed as hardening, not a safety alarm (a BASELINE account is normal, not unsafe). A hook is credited (+30) ONLY when its exact bytecode (HookHash) matches a registered xahc-prover-PROVEN quantum-policy hook (e.g. qkey_guard / master-disuse); mere hook presence is never scored. Read-only.",
+  description: "Grade a Xahau account for quantum (HNDL) FUTURE-hardening readiness: master-key-disabled, regular key, multi-sign, and a PROVEN quantum-policy Hook → 0-100 score + tier + recommendations. Framed as hardening, not a safety alarm (a BASELINE account is normal, not unsafe). A hook is credited (+30) ONLY when its exact bytecode (HookHash) matches a registered, formally proven quantum-policy hook; mere hook presence is never scored. Read-only.",
   inputSchema: { address: z.string().min(25).describe("r-address"), network: NET },
   outputSchema: QUANTUM_OUT,
 }, async ({ address, network }) => {
