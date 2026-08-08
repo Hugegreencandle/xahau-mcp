@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import pkg from "xrpl-accountlib";
-import { accountKeylet, hookKeylet, offerKeylet, lineKeylet, keyletToIndexHex } from "../src/keylet.js";
+import { accountKeylet, hookKeylet, offerKeylet, lineKeylet, keyletToIndexHex,
+  amendmentsKeylet, feesKeylet, negativeUnlKeylet } from "../src/keylet.js";
+import { runHook } from "../src/sandbox.js";
+import { reconstructContext } from "../src/fidelity.js";
 
 const accid = Uint8Array.from((pkg as any).libraries.rippleAddressCodec.decodeAccountID("rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"));
 
@@ -40,5 +46,35 @@ describe("keylet derivation", () => {
     expect(keyletToIndexHex(Uint8Array.from(Buffer.from("0061" + idx, "hex")))).toBe(idx.toUpperCase());
     expect(keyletToIndexHex(Uint8Array.from(Buffer.from(idx, "hex")))).toBe(idx.toUpperCase());
     expect(keyletToIndexHex(new Uint8Array(10))).toBeNull();
+  });
+
+  // Singleton derivations vs canonical/known indexes (the anchor for the whole
+  // indexHash(uint16 ns || fields) approach copied from xahaud Indexes.cpp).
+  it("amendments == known on-ledger singleton index", () => {
+    expect(keyletToIndexHex(amendmentsKeylet())).toBe(
+      "7DB0788C020F02780A673DC74757F23823FA3014C1866E72CC4CD8B226CD6EF4");
+  });
+  it("fees + negativeUNL == canonical XRPL singleton indexes", () => {
+    expect(keyletToIndexHex(feesKeylet())).toBe(
+      "4BC50C9B0D8515D3EAAE1E74B29A95804346C491EE1A95BF25E4AAB854A6A651");
+    expect(keyletToIndexHex(negativeUnlKeylet())).toBe(
+      "2E8A59AA9D3B5B186B0B9E0F62E6C02587CA74A4D778938E957B6357D364B244");
+  });
+});
+
+// Integration lock: the rshooks 13_keylets example computes ALL 26 keylet types.
+// Before full util_keylet coverage it rolled back (rc 102) with unsupportedCalls:["util_keylet"],
+// degraded. Now it must run to a clean accept with nothing unsupported and no degradation.
+describe("util_keylet full coverage — rshooks keylets example runs clean", () => {
+  it("accepts with no unsupported calls and no degradation", () => {
+    const DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures-wasm");
+    const wasm = Uint8Array.from(Buffer.from(readFileSync(join(DIR, "keylets.hex"), "utf8").trim(), "hex"));
+    const acc = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh";
+    const ctx = reconstructContext({ TransactionType: "Payment", Account: acc, Destination: acc, Amount: "1000000" }, acc);
+    const r = runHook(wasm, ctx);
+    expect(r.exit).toBe("accept");
+    expect(r.returnCode).toBe("0");
+    expect(r.unsupportedCalls).toEqual([]);
+    expect(r.degraded).toBe(false);
   });
 });
