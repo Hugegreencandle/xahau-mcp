@@ -59,13 +59,68 @@ export interface QuantumSignals {
   /** Account runs a Hook whose EXACT bytecode (by HookHash) is a registered, formally proven
    *  quantum-policy hook. Optional; absent => not credited (the honest default). */
   hasProvenQuantumHook?: boolean;
+  /** Trigger-scope outcome for an installed proven hook. Only "fires" is creditable; "disarmed"
+   *  and "unresolved" produce a loud signal and NO score. See resolveOutgoingHookOn(). */
+  hookOnStatus?: "fires" | "disarmed" | "unresolved" | "none";
+}
+
+/** ttPAYMENT — the ordinary outgoing transaction a spend-guard must cover.
+ *  (Xahau/xahaud include/xrpl/protocol/detail/transactions.macro: TRANSACTION(ttPAYMENT, 0, ...)) */
+const TT_PAYMENT = 0;
+/** ttHOOK_SET = 22 — canHook flips this bit before inverting the field. */
+const TT_HOOK_SET = 22;
+
+/**
+ * Does `hookOn` (a 256-bit hex field) let the hook fire on transaction type `tt`?
+ *
+ * Mirrors hook::canHook exactly — Xahau/xahaud src/xrpld/app/hook/detail/applyHook.cpp:816-825:
+ *   hookOn ^= UINT256_BIT[ttHOOK_SET];   // flip the ttHOOK_SET bit
+ *   hookOn = ~hookOn;                    // invert the ENTIRE field
+ *   return (hookOn & UINT256_BIT[txType]) != 0;
+ *
+ * NOTE THE POLARITY: the field is stored INVERTED — a SET bit means "do NOT fire" for every type
+ * except ttHOOK_SET, which is flipped first. An empty/absent field therefore fires on everything
+ * except SetHook, which is the permissive default.
+ */
+export function canHook(hookOnHex: string, tt: number): boolean {
+  let v = BigInt("0x" + (hookOnHex || "0").replace(/^0x/i, ""));
+  v ^= (1n << BigInt(TT_HOOK_SET));
+  v = ~v & ((1n << 256n) - 1n);
+  return ((v >> BigInt(tt)) & 1n) === 1n;
+}
+
+/**
+ * Resolve the OUTGOING HookOn for an installed hook, in xahaud's exact precedence order
+ * (hook::getHookOn, applyHook.cpp:851-865):
+ *   Hook.HookOnOutgoing -> Hook.HookOn -> HookDefinition.HookOnOutgoing -> HookDefinition.HookOn -> 0
+ * Returns null when it cannot be resolved (definition unreadable) so the caller can FAIL CLOSED
+ * rather than assume the permissive default.
+ */
+async function resolveOutgoingHookOn(hookEntry: any, hookHash: string, network: Network): Promise<string | null> {
+  const h = hookEntry?.Hook ?? hookEntry;
+  if (h?.HookOnOutgoing) return String(h.HookOnOutgoing);
+  if (h?.HookOn) return String(h.HookOn);
+  try {
+    const d = await rpc<any>("ledger_entry", { hook_definition: hookHash, ledger_index: "validated" }, network);
+    const node = d?.node ?? d?.result?.node;
+    if (node?.HookOnOutgoing) return String(node.HookOnOutgoing);
+    if (node?.HookOn) return String(node.HookOn);
+    return node ? "0" : null;   // definition read but carries no HookOn => xahaud's uint256{0}
+  } catch { return null; }      // could not read the definition => unresolved, do not guess
 }
 
 /**
  * Registry of quantum-policy Hooks whose bytecode has been formally proven.
  * Key = on-ledger HookHash (SHA-512Half of the hook wasm) — matching it proves the DEPLOYED
  * bytecode is byte-identical to the proven artifact (HookHash binds to wasm bytes). This is the
- * only honest way to credit a hook: not "a hook is installed", but "THIS proven hook is installed".
+ * only honest way to IDENTIFY a hook: not "a hook is installed", but "THIS proven hook is installed".
+ *
+ * ⚠️ Identity is NOT enforcement. HookHash covers the wasm bytes and nothing else, so a matching
+ * hash says the right CODE is deployed — not that it still RUNS. sfHookOn / sfHookOnOutgoing are
+ * separate, owner-settable SetHook fields, so a proven guard can be silenced while its HookHash
+ * stays byte-identical. quantumGrade() therefore checks BOTH: hash identity AND trigger scope
+ * (canHook / resolveOutgoingHookOn). Crediting on hash alone would report a disarmed guard as
+ * enforcement.
  */
 export const PROVEN_QUANTUM_HOOKS: Record<string, { name: string; invariant: string; note: string }> = {
   // qkey_guard — forbids the master key from signing ordinary outgoing txns.
@@ -101,7 +156,9 @@ export function gradeSignals(s: QuantumSignals): { score: number; tier: "LOW" | 
   else signals.push("master key active — normal default, not a flaw; disabling it behind a regular key / signer list is the single biggest future-hardening step");
   if (s.hasMultiSig) { score += 35; signals.push(`multi-sign active, ${s.signerCount} signer(s) (+35)`); }
   if (s.hasRegularKey) { score += 25; signals.push("regular key set — master key is rotatable (+25)"); }
-  if (s.hasProvenQuantumHook) { score += 30; signals.push("PROVEN quantum-policy Hook enforced on-ledger — master key cannot sign ordinary txns (+30)"); }
+  if (s.hasProvenQuantumHook) { score += 30; signals.push("PROVEN quantum-policy Hook installed AND enabled for outgoing Payments — master key cannot sign ordinary txns (+30)"); }
+  else if (s.hookOnStatus === "disarmed") signals.push("⚠️ a PROVEN quantum-policy Hook is installed but its HookOn EXCLUDES outgoing Payments — it will not run, so it is not enforcing anything and earns no credit. Re-enable it via SetHook (HookOn is owner-settable and does not change the HookHash).");
+  else if (s.hookOnStatus === "unresolved") signals.push("⚠️ a PROVEN quantum-policy Hook is installed but its HookOn could not be read, so whether it actually fires is UNVERIFIED — no credit awarded (failing closed).");
   if (score > 100) score = 100;  // cap: the four signals can sum past 100; readiness tops out at 100
   const tier = score >= 70 ? "HIGH" : score >= 35 ? "MEDIUM" : "LOW";
   const recommendations: string[] = [];
@@ -125,7 +182,12 @@ export async function quantumGrade(address: string, network: Network) {
   } catch { /* tolerate */ }
 
   let hooksInstalled = 0;
-  let provenHook: { name: string; invariant: string; note: string; hookHash: string } | null = null;
+  let provenHook: { name: string; invariant: string; note: string; hookHash: string;
+                    firesOnPayment?: boolean | null; hookOn?: string } | null = null;
+  /** "fires" = proven hook installed AND enabled for outgoing Payments (creditable);
+   *  "disarmed" = installed but HookOn excludes it, so it does not run; "unresolved" = HookOn
+   *  could not be read, so nothing is asserted. Only "fires" earns the score. */
+  let hookOnStatus: "fires" | "disarmed" | "unresolved" | "none" = "none";
   try {
     const h = await getAccountObjects(address, network, "hook");
     const ho = h.account_objects.find((o: any) => o.LedgerEntryType === "Hook") as any;
@@ -136,18 +198,36 @@ export async function quantumGrade(address: string, network: Network) {
     for (const e of hooks) {
       const hh = String((e?.Hook ?? e)?.HookHash ?? "").toUpperCase();
       const rec = hh && PROVEN_QUANTUM_HOOKS[hh];
-      if (rec) { provenHook = { ...rec, hookHash: hh }; break; }
+      if (!rec) continue;
+      // TRIGGER SCOPE. A matching HookHash proves the deployed BYTECODE is the proven artifact —
+      // it does NOT prove the hook still FIRES. HookHash = sha512Half(wasm) only
+      // (xahaud SetHook.cpp:1768), while sfHookOn / sfHookOnOutgoing are separate SetHook fields
+      // the account owner can change at any time, with no amendment gate
+      // (SetHook.cpp:229,267,300), and execution is gated on hook::canHook (Transactor.cpp:307-310).
+      // So a proven guard can be silenced with its HookHash byte-identical. Credit requires BOTH.
+      const hookOn = await resolveOutgoingHookOn(e, hh, network);
+      if (hookOn === null) {
+        hookOnStatus = "unresolved";
+        provenHook = { ...rec, hookHash: hh, firesOnPayment: null };
+        break;
+      }
+      const fires = canHook(hookOn, TT_PAYMENT);
+      hookOnStatus = fires ? "fires" : "disarmed";
+      provenHook = { ...rec, hookHash: hh, firesOnPayment: fires, hookOn };
+      if (fires) break;   // credited; keep looking only while nothing qualifies
     }
   } catch { /* tolerate */ }
 
-  const hasProvenQuantumHook = provenHook !== null;
+  // Credit ONLY when the proven hook is installed AND demonstrably still fires. Installed-but-
+  // disarmed, or unreadable trigger scope, both score zero — a guard that does not run guards nothing.
+  const hasProvenQuantumHook = provenHook !== null && hookOnStatus === "fires";
   const { score, tier, tierLabel, signals, recommendations } =
-    gradeSignals({ masterDisabled, hasRegularKey, hasMultiSig, signerCount, hasProvenQuantumHook });
+    gradeSignals({ masterDisabled, hasRegularKey, hasMultiSig, signerCount, hasProvenQuantumHook, hookOnStatus });
 
   return {
     address, score, tier, tierLabel, signals,
     masterDisabled, hasRegularKey, hasMultiSig, signerCount, hooksInstalled,
-    hasProvenQuantumHook, provenHook,
+    hasProvenQuantumHook, provenHook, hookOnStatus,
     // Honest hook dimension: a hook earns quantum credit ONLY when its exact bytecode (HookHash)
     // matches a registered, formally proven quantum-policy hook. Mere hook PRESENCE is never
     // scored — presence does not imply a key-rotation policy.

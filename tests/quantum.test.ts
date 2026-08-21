@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { gradeSignals, classifyHndl, accountIdFromPubkey, assessCoverage, aggregateScorecard, classifyAccountConfig, aggregateConfigCensus } from "../src/quantum.js";
+import { gradeSignals, canHook, classifyHndl, accountIdFromPubkey, assessCoverage, aggregateScorecard, classifyAccountConfig, aggregateConfigCensus } from "../src/quantum.js";
 import type { ScorecardRow } from "../src/quantum.js";
 
 describe("quantum_grade scoring", () => {
@@ -225,5 +225,58 @@ describe("config census aggregation", () => {
     expect(a.noRotationPct).toBe(50);
     expect(a.totalDrops).toBe("10000000");
     expect(a.noRotationSupplyPct).toBe(90);   // 9 of 10 XAH
+  });
+});
+
+describe("trigger scope — a proven hook that does not fire earns nothing", () => {
+  // Regression for: a matching HookHash proves the deployed BYTECODE is the proven artifact, but
+  // HookHash = sha512Half(wasm) only (xahaud SetHook.cpp:1768). sfHookOn/sfHookOnOutgoing are
+  // separate, owner-settable SetHook fields with no amendment gate (SetHook.cpp:229,267,300) and
+  // execution is gated on hook::canHook (Transactor.cpp:307-310). Before this, quantum_grade
+  // awarded +30 and said "enforced on-ledger" on a hash match alone — a disarmed guard scored as
+  // enforcement.
+  const base = { masterDisabled: false, hasRegularKey: false, hasMultiSig: false, signerCount: 0 };
+
+  it("canHook mirrors xahaud exactly, including the inverted polarity", () => {
+    // independent reimplementation of applyHook.cpp:816-825
+    const ref = (h: string, tt: number) => {
+      let v = BigInt("0x" + h);
+      v ^= (1n << 22n);                       // ttHOOK_SET
+      v = ~v & ((1n << 256n) - 1n);
+      return ((v >> BigInt(tt)) & 1n) === 1n;
+    };
+    for (const h of ["0".repeat(64), "f".repeat(64), "01".repeat(32), "0".repeat(63) + "1"]) {
+      for (let tt = 0; tt < 64; tt++) expect(canHook(h, tt)).toBe(ref(h, tt));
+    }
+    // a SET bit means DO NOT FIRE — the counterintuitive part
+    expect(canHook("0".repeat(64), 0)).toBe(true);        // permissive default
+    expect(canHook("0".repeat(63) + "1", 0)).toBe(false); // Payment disarmed
+  });
+
+  it("credits +30 only when the proven hook actually fires on outgoing Payments", () => {
+    const g = gradeSignals({ ...base, hasProvenQuantumHook: true, hookOnStatus: "fires" });
+    expect(g.score).toBe(30);
+    expect(g.signals.join(" ")).toContain("installed AND enabled for outgoing Payments");
+  });
+
+  it("installed but DISARMED scores zero and says so loudly", () => {
+    const g = gradeSignals({ ...base, hasProvenQuantumHook: false, hookOnStatus: "disarmed" });
+    expect(g.score).toBe(0);
+    const s = g.signals.join(" ");
+    expect(s).toContain("HookOn EXCLUDES outgoing Payments");
+    expect(s).toContain("does not change the HookHash");
+  });
+
+  it("unreadable trigger scope fails CLOSED — no credit, stated as unverified", () => {
+    const g = gradeSignals({ ...base, hasProvenQuantumHook: false, hookOnStatus: "unresolved" });
+    expect(g.score).toBe(0);
+    expect(g.signals.join(" ")).toContain("UNVERIFIED");
+  });
+
+  it("never claims bare 'enforced on-ledger' from a hash match", () => {
+    for (const st of ["fires", "disarmed", "unresolved", "none"] as const) {
+      const g = gradeSignals({ ...base, hasProvenQuantumHook: st === "fires", hookOnStatus: st });
+      expect(g.signals.join(" ")).not.toContain("Hook enforced on-ledger");
+    }
   });
 });
