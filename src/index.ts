@@ -49,6 +49,11 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CORPUS_PATH = join(__dirname, "..", "data", "hook-corpus.json");
+// Single source of truth for the version: the package.json shipped alongside dist/.
+const VERSION: string = (() => {
+  try { return JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8")).version ?? "0.0.0"; }
+  catch { return "0.0.0"; }
+})();
 
 const NET = z.enum(["mainnet", "testnet"]).default("mainnet");
 type Net = "mainnet" | "testnet";
@@ -62,7 +67,7 @@ function fail(text: string, structured: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], structuredContent: { error: text, ...structured }, isError: true as const };
 }
 
-const server = new McpServer({ name: "xahau-mcp", version: "2.0.1" });
+const server = new McpServer({ name: "xahau-mcp", version: VERSION });
 
 /* ===================== Tier A — Ledger / RPC (read-only) ===================== */
 
@@ -1341,7 +1346,24 @@ async function smoke() {
   console.error("xahau-mcp smoke:\n  " + lines.join("\n  "));
 }
 
+const HELP = `xahau-mcp ${VERSION} — Model Context Protocol server for the Xahau network (stdio).
+
+Usage:
+  xahau-mcp            start the MCP server on stdio (launch it from an MCP client)
+  xahau-mcp --smoke    health check: local data files + one live mainnet read (prints to stderr)
+  xahau-mcp --version  print the version
+  xahau-mcp --help     print this help
+
+Environment (optional):
+  XAHAU_RPC_URLS       comma-separated mainnet JSON-RPC endpoints (overrides built-ins)
+  XAHAU_TEST_RPC_URLS  comma-separated testnet JSON-RPC endpoints (overrides built-ins)
+
+Read-only toward the network: never signs or submits transactions; holds no keys.
+Docs: https://github.com/Hugegreencandle/xahau-mcp`;
+
 async function main() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) { process.stdout.write(HELP + "\n"); return; }
+  if (process.argv.includes("--version") || process.argv.includes("-v")) { process.stdout.write(VERSION + "\n"); return; }
   if (process.argv.includes("--smoke")) { await smoke(); return; }
   const transport = new StdioServerTransport();
   await server.connect(transport);
