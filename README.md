@@ -175,10 +175,41 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 
 > New here or non-technical? Start with the **[plain-English tutorial](docs/TUTORIAL.md)** — what it does + cool things to just *ask*.
 
-Install straight from GitHub — no npm-registry account needed; it builds on install:
+Requires **Node.js 20+**. The server speaks MCP over **stdio**; your MCP client launches it.
+
+### From npm
 
 ```bash
-npm install -g github:Hugegreencandle/xahau-mcp
+npx -y xahau-mcp --help      # run without installing (prints usage and exits)
+npm install -g xahau-mcp     # or install the `xahau-mcp` command globally
+xahau-mcp --smoke            # health check: local data + one live mainnet read
+```
+
+Run with no arguments, `xahau-mcp` waits for an MCP client on stdin/stdout — it is not an interactive CLI.
+
+### Add it to an MCP client
+
+**Claude Code:**
+```bash
+claude mcp add xahau -- npx -y xahau-mcp
+```
+
+**Claude Desktop** (`claude_desktop_config.json`), or any client that takes an `mcpServers` block:
+```json
+{
+  "mcpServers": {
+    "xahau": { "command": "npx", "args": ["-y", "xahau-mcp"] }
+  }
+}
+```
+If you installed globally, `"command": "xahau-mcp"` with no `args` works too. To pin your own RPC nodes, add `"env": { "XAHAU_RPC_URLS": "https://your-node.example" }` (comma-separated; `XAHAU_TEST_RPC_URLS` for testnet).
+
+The server is read-only toward the network: it reads ledger state over public JSON-RPC, never signs or submits a transaction, and holds no keys. The offline tools (Hook VM, static analyzer, codec, HookOn) need no network at all.
+
+### From GitHub / source
+
+```bash
+npm install -g github:Hugegreencandle/xahau-mcp   # builds on install via `prepare`
 ```
 
 Or clone and build:
@@ -186,20 +217,10 @@ Or clone and build:
 git clone https://github.com/Hugegreencandle/xahau-mcp && cd xahau-mcp
 npm install        # the `prepare` script compiles dist/ automatically
 npm run smoke      # health check + a live mainnet read
-npm test           # 298 tests (offline)
+npm test           # offline test suite
 ```
 
-Also published to **GitHub Packages** as `@hugegreencandle/xahau-mcp`. GitHub Packages requires auth even for public installs, so add to your `.npmrc`:
-```
-@hugegreencandle:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN   # token with read:packages
-```
-then `npm install -g @hugegreencandle/xahau-mcp`. (The `github:` install above needs no auth and is simpler.)
-
-Add to an MCP client (e.g. Claude Code / Desktop):
-```json
-{ "mcpServers": { "xahau": { "command": "xahau-mcp" } } }
-```
+Older versions (≤ 1.4.0) were published to **GitHub Packages** as `@hugegreencandle/xahau-mcp`; that scope needs a GitHub token even for public installs. Use the unscoped npm package above instead.
 
 ## HTTP shim (browsers, wallets, web tools)
 
