@@ -2,6 +2,7 @@
 // Ports the xrpl-audit quantum_grade model to Xahau and adds a Hook/PQC dimension.
 // ed25519 / secp256k1 keys are not quantum-safe; the near-term defense is minimizing exposed
 // long-lived key material (disable the master key behind a rotatable regular key / signer list).
+import { requiredHookName } from "./hookname.js";
 import { createHash } from "node:crypto";
 import { getAccountInfo, getAccountObjects, getServerInfo, rpc, type Network } from "./rpc.js";
 import { validateAddress } from "./util.js";
@@ -61,7 +62,7 @@ export interface QuantumSignals {
   hasProvenQuantumHook?: boolean;
   /** Trigger-scope outcome for an installed proven hook. Only "fires" is creditable; "disarmed"
    *  and "unresolved" produce a loud signal and NO score. See resolveOutgoingHookOn(). */
-  hookOnStatus?: "fires" | "disarmed" | "unresolved" | "none";
+  hookOnStatus?: "fires" | "disarmed" | "unresolved" | "named" | "none";
 }
 
 /** ttPAYMENT — the ordinary outgoing transaction a spend-guard must cover.
@@ -158,6 +159,7 @@ export function gradeSignals(s: QuantumSignals): { score: number; tier: "LOW" | 
   if (s.hasRegularKey) { score += 25; signals.push("regular key set — master key is rotatable (+25)"); }
   if (s.hasProvenQuantumHook) { score += 30; signals.push("PROVEN quantum-policy Hook installed AND enabled for outgoing Payments — master key cannot sign ordinary txns (+30)"); }
   else if (s.hookOnStatus === "disarmed") signals.push("⚠️ a PROVEN quantum-policy Hook is installed but its HookOn EXCLUDES outgoing Payments — it will not run, so it is not enforcing anything and earns no credit. Re-enable it via SetHook (HookOn is owner-settable and does not change the HookHash).");
+  else if (s.hookOnStatus === "named") signals.push("⚠️ a PROVEN quantum-policy Hook is installed with a HookName — xahaud runs a named hook ONLY for transactions carrying that exact HookName (Transactor.cpp:1357-1369), so an ordinary Payment without it skips the guard entirely. It is not enforcing anything and earns no credit. Reinstall it without a HookName to make it unconditional.");
   else if (s.hookOnStatus === "unresolved") signals.push("⚠️ a PROVEN quantum-policy Hook is installed but its HookOn could not be read, so whether it actually fires is UNVERIFIED — no credit awarded (failing closed).");
   if (score > 100) score = 100;  // cap: the four signals can sum past 100; readiness tops out at 100
   const tier = score >= 70 ? "HIGH" : score >= 35 ? "MEDIUM" : "LOW";
@@ -183,11 +185,11 @@ export async function quantumGrade(address: string, network: Network) {
 
   let hooksInstalled = 0;
   let provenHook: { name: string; invariant: string; note: string; hookHash: string;
-                    firesOnPayment?: boolean | null; hookOn?: string } | null = null;
+                    firesOnPayment?: boolean | null; hookOn?: string; requiredHookName?: string } | null = null;
   /** "fires" = proven hook installed AND enabled for outgoing Payments (creditable);
    *  "disarmed" = installed but HookOn excludes it, so it does not run; "unresolved" = HookOn
    *  could not be read, so nothing is asserted. Only "fires" earns the score. */
-  let hookOnStatus: "fires" | "disarmed" | "unresolved" | "none" = "none";
+  let hookOnStatus: "fires" | "disarmed" | "unresolved" | "named" | "none" = "none";
   try {
     const h = await getAccountObjects(address, network, "hook");
     const ho = h.account_objects.find((o: any) => o.LedgerEntryType === "Hook") as any;
@@ -205,6 +207,15 @@ export async function quantumGrade(address: string, network: Network) {
       // the account owner can change at any time, with no amendment gate
       // (SetHook.cpp:229,267,300), and execution is gated on hook::canHook (Transactor.cpp:307-310).
       // So a proven guard can be silenced with its HookHash byte-identical. Credit requires BOTH.
+      // NAMED HOOK. A non-empty HookName on the Hook object means xahaud skips this hook for any tx
+      // that does not carry the byte-identical sfHookName (Transactor.cpp:1357-1369) — checked
+      // before HookOn. A plain Payment carries none, so the guard is bypassable: no credit.
+      const req = requiredHookName(e?.Hook ?? e);
+      if (req.hex || req.invalid) {
+        hookOnStatus = "named";
+        provenHook = { ...rec, hookHash: hh, firesOnPayment: false, ...(req.hex ? { requiredHookName: req.hex } : {}) };
+        continue;
+      }
       const hookOn = await resolveOutgoingHookOn(e, hh, network);
       if (hookOn === null) {
         hookOnStatus = "unresolved";
@@ -232,7 +243,7 @@ export async function quantumGrade(address: string, network: Network) {
     // matches a registered, formally proven quantum-policy hook. Mere hook PRESENCE is never
     // scored — presence does not imply a key-rotation policy.
     hookPolicyNote: provenHook
-      ? `PROVEN quantum-policy hook installed: ${provenHook.name} (invariant ${provenHook.invariant}, HookHash ${provenHook.hookHash.slice(0, 16)}…). Credited +30. ${provenHook.note}`
+      ? `PROVEN quantum-policy hook installed: ${provenHook.name} (invariant ${provenHook.invariant}, HookHash ${provenHook.hookHash.slice(0, 16)}…). ${hasProvenQuantumHook ? "Credited +30." : `NOT credited (${hookOnStatus}: it does not run on every outgoing Payment).`} ${provenHook.note}`
       : hooksInstalled > 0
         ? `${hooksInstalled} hook(s) installed — none match a registered PROVEN quantum-policy hook, so NOT scored. Presence alone earns no credit.`
         : "no hooks installed.",

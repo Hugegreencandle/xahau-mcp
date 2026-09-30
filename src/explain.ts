@@ -3,6 +3,7 @@
 // decoded), and recent activity. Pure composition of existing read tools.
 // Network access is injected (postmortem.ts pattern) so unit tests run offline; the live wiring in
 // index.ts is STRICTLY SERIAL with >=1100ms spacing — exactly 5 RPC reads per invocation.
+import { requiredHookName } from "./hookname.js";
 import { decodeHookOn } from "./hookon.js";
 import { decodeLeaseUri } from "./evernode.js";
 
@@ -20,7 +21,7 @@ export interface AccountExplained {
   summary: string;
   balanceXah: string | null;
   keySafety: { masterDisabled: boolean; regularKey: string | null; note: string };
-  hooks: { count: number; details: { hookHash: string | null; firesOn: string[] | null }[] };
+  hooks: { count: number; details: { hookHash: string | null; firesOn: string[] | null; requiredHookName: string | null }[] };
   trustlines: { count: number; currencies: string[] };
   uriTokens: { count: number; evernodeLeases: number; sample: Record<string, unknown>[] };
   recentActivity: { count: number; byType: Record<string, number>; lastTxIso: string | null };
@@ -55,6 +56,8 @@ export async function explainAccount(address: string, deps: ExplainDeps): Promis
   const hookDetails = hookArr.map((h) => ({
     hookHash: (h.HookHash as string) ?? null,
     firesOn: h.HookOn ? (() => { try { return decodeHookOn(h.HookOn).firesOn; } catch { return null; } })() : null,
+    // named hook: fires only when the tx carries this exact HookName (Transactor.cpp:1357-1369)
+    requiredHookName: requiredHookName(h).hex,
   }));
   if (hookDetails.length) notes.push(`this account runs ${hookDetails.length} on-ledger Hook(s) — its transactions are subject to their rules (audit with audit_account_hooks)`);
 

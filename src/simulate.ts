@@ -26,6 +26,7 @@ import { inspectEmitted } from "./emitted.js";
 import { scorePayload } from "./scam.js";
 import { validateAddress } from "./util.js";
 import { predictTransactor, TRANSACTOR_SUPPORTED, type TransactorPrediction } from "./transactorLite.js";
+import { hookNameGate, txHookNamePreflight } from "./hookname.js";
 
 /** applyHook.cpp getTransactionalStakeHolders — the statically-derivable rows.
  *  field: top-level tx field holding an account; strong: can rollback.
@@ -170,6 +171,8 @@ export interface HookSimResult {
   strong: boolean;
   fired: boolean;
   skippedReason?: string;
+  /** uppercase hex HookName this hook requires the tx to carry (named hooks), or absent */
+  requiredHookName?: string;
   exit?: SandboxResult["exit"];
   returnCode?: string | null;
   returnString?: string | null;
@@ -245,7 +248,7 @@ export async function simulateTransaction(
     /** Simulate NOT-YET-DEPLOYED code: account r-address -> candidate hook. When present
      *  for a stakeholder, its on-ledger hook chain is replaced by this single candidate so a
      *  freshly-compiled wasm runs against the full live-ledger TSH chain BEFORE SetHook. */
-    candidateHooks?: Record<string, { createCodeHex: string; hookOn?: string; parameters?: unknown[]; namespace?: string }>;
+    candidateHooks?: Record<string, { createCodeHex: string; hookOn?: string; parameters?: unknown[]; namespace?: string; hookName?: string }>;
     /** Override how hook bytecode is executed. The PUBLIC HTTP shim injects a
      *  worker-isolated, timeout+memory-capped runner so untrusted wasm can't hang
      *  or OOM the process. Defaults to the in-process synchronous runHook (used by
@@ -314,6 +317,9 @@ export async function simulateTransaction(
         : { name: "balance", status: "FAIL", detail: `amount+fee ${need} drops exceeds spendable ~${spendable} drops (${reserveNote})` });
     }
   }
+  // tx-side HookName preflight (Transactor.cpp:152-160) — see hookname.ts
+  const hnCheck = txHookNamePreflight(tx);
+  if (hnCheck) staticChecks.push({ name: "HookName", ...hnCheck });
   if (tx.LastLedgerSequence !== undefined && !historical && Number(tx.LastLedgerSequence) <= ledgerIndex) {
     staticChecks.push({ name: "LastLedgerSequence", status: "FAIL", detail: `already expired (tx ${tx.LastLedgerSequence} <= validated ${ledgerIndex}) — tefMAX_LEDGER` });
   }
@@ -389,7 +395,7 @@ export async function simulateTransaction(
     let hooks: Record<string, any>[];
     if (candidate) {
       // not-yet-deployed code: a synthetic single-hook chain from the candidate
-      hooks = [{ HookHash: "CANDIDATE", HookNamespace: candidate.namespace, HookParameters: candidate.parameters }];
+      hooks = [{ HookHash: "CANDIDATE", HookNamespace: candidate.namespace, HookParameters: candidate.parameters, ...(candidate.hookName !== undefined ? { HookName: candidate.hookName } : {}) }];
       notes.push(`candidate code simulated for ${sh.account} (${candidate.createCodeHex.length / 2} bytes, NOT yet on ledger)`);
     } else {
       await sleep(spacing);
@@ -400,6 +406,15 @@ export async function simulateTransaction(
       const h = hooks[pos] as Record<string, any>;
       const hash = typeof h.HookHash === "string" ? h.HookHash : null;
       if (!hash) continue;
+      // Named-hook rule (Transactor.cpp:1357-1369): a hook whose Hook object carries a non-empty
+      // HookName is skipped unless the tx carries the byte-identical sfHookName. Applies to the
+      // originator, strong and weak TSH chains alike, before the HookOn check. Checked before the
+      // definition read, which it does not depend on (saves an RPC read).
+      const nameGate = hookNameGate(h, tx);
+      if (!nameGate.passes) {
+        hookRuns.push({ role: sh.role, account: sh.account, position: pos, hookHash: hash, strong: sh.strong, fired: false, skippedReason: nameGate.reason, ...(nameGate.required ? { requiredHookName: nameGate.required } : {}) });
+        continue;
+      }
       let def: Record<string, any> | null;
       if (candidate) {
         def = { createCodeHex: candidate.createCodeHex, HookOn: candidate.hookOn, HookParameters: candidate.parameters };

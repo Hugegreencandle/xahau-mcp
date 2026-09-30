@@ -1,0 +1,160 @@
+{
+ "_source": "Xahau TESTNET (https://xahau-test.net, network_id 21338), read-only JSON-RPC: tx x2, account_objects(type:hook), ledger_entry(hook_definition). Verbatim RPC results.",
+ "_captured": "2026-09-30",
+ "_why": "Named-hook rule evidence: hook 68A7D6BD... on rKQpd83h... carries HookName 616363657074 ('accept'). Invoke 8F67F380... (no HookName) executed 0 hooks; Invoke BD79993A... (HookName 616363657074) executed it (HookResult 3 = accept).",
+ "accountHooks": {
+  "account": "rKQpd83hDpdyNGRbAaHavqkFri6TwyVG7h",
+  "account_objects": [
+   {
+    "Account": "rKQpd83hDpdyNGRbAaHavqkFri6TwyVG7h",
+    "Flags": 0,
+    "Hooks": [
+     {
+      "Hook": {
+       "HookHash": "68A7D6BD77FB98A7E05E0BFD12180352903F131B2780F848267C37DC0837707C",
+       "HookName": "616363657074"
+      }
+     }
+    ],
+    "LedgerEntryType": "Hook",
+    "OwnerNode": "0",
+    "PreviousTxnID": "0FDD4111C87AD2BA63EE994FF1CB2349220AAA1F10A778B06EDBBECBAD44CEA0",
+    "PreviousTxnLgrSeq": 12764447,
+    "index": "E28F994720A3C6E7D6C4FFF5EF43276E8ED0955DF8D236909B05499A0CFB0BF5"
+   }
+  ],
+  "ledger_current_index": 12768446,
+  "status": "success",
+  "validated": false
+ },
+ "hookDefinition": {
+  "index": "C7ADD5EA9B1E9BD489582EC815788ABA275B47D7512C83F4084F638928B649D8",
+  "ledger_hash": "4A6A4C4E9D4513572E7EFDB8E5CE733E576EC377D558E935BE99D42AC0740CE4",
+  "ledger_index": 12768448,
+  "node": {
+   "CreateCode": "0061736D01000000011C0460057F7F7F7F7F017E60037F7F7E017E60017F017E60027F7F017F02230303656E76057472616365000003656E7606616363657074000103656E76025F67000303020102050301000306010007080104686F6F6B00030A1D011B0041818008412141014100410010001A41014100420010011A000B0B290100418180080B216163636570742D616C6C3A20616363657074696E67207472616E73616374696F6E",
+   "Fee": "14",
+   "Flags": 0,
+   "HookApiVersion": 0,
+   "HookHash": "68A7D6BD77FB98A7E05E0BFD12180352903F131B2780F848267C37DC0837707C",
+   "HookNamespace": "03FD01479F90820A2DF0E8D0294017F76CAE9FCF559171C9511D548450EE4A96",
+   "HookOn": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FFFFFFFFFFFFFFFFFFBFFFFF",
+   "HookParameters": [],
+   "HookSetTxnID": "0FDD4111C87AD2BA63EE994FF1CB2349220AAA1F10A778B06EDBBECBAD44CEA0",
+   "LedgerEntryType": "HookDefinition",
+   "PreviousTxnID": "0FDD4111C87AD2BA63EE994FF1CB2349220AAA1F10A778B06EDBBECBAD44CEA0",
+   "PreviousTxnLgrSeq": 12764447,
+   "ReferenceCount": "1",
+   "index": "C7ADD5EA9B1E9BD489582EC815788ABA275B47D7512C83F4084F638928B649D8"
+  },
+  "status": "success",
+  "validated": true
+ },
+ "txNoHookName": {
+  "Account": "rKQpd83hDpdyNGRbAaHavqkFri6TwyVG7h",
+  "Fee": "22",
+  "LastLedgerSequence": 12764467,
+  "NetworkID": 21338,
+  "Sequence": 844072032,
+  "SigningPubKey": "02A06611A3B54D9E8168B11785AD752191E9518477EB024C5543C81283B6C1DF87",
+  "TransactionType": "Invoke",
+  "TxnSignature": "3045022100851AB5D2D2C4933844B4CB96B01252BB9FBDE7129221034530536E7FD42BBC2B022023B4D37592BCC299D50657D8E85E941A7A70CC5293C5F9987E1865EF44D6C125",
+  "ctid": "C0C2C5210000535A",
+  "date": 844072043,
+  "hash": "8F67F38049C10DA6F364E86DB1FDD9B2718759DA8DCF297EEDCCEB3B8BF2C4D1",
+  "inLedger": 12764449,
+  "ledger_index": 12764449,
+  "meta": {
+   "AffectedNodes": [
+    {
+     "ModifiedNode": {
+      "FinalFields": {
+       "Account": "rKQpd83hDpdyNGRbAaHavqkFri6TwyVG7h",
+       "AccountIndex": "6f01",
+       "Balance": "999897356",
+       "Flags": 0,
+       "OwnerCount": 1,
+       "Sequence": 844072033,
+       "TouchCount": "2"
+      },
+      "LedgerEntryType": "AccountRoot",
+      "LedgerIndex": "64998230C4919E4B179AB5E87E938C7FBE30F147A3C35695A01E7C48265A7A5A",
+      "PreviousFields": {
+       "Balance": "999897378",
+       "Sequence": 844072032,
+       "TouchCount": "1"
+      },
+      "PreviousTxnID": "0FDD4111C87AD2BA63EE994FF1CB2349220AAA1F10A778B06EDBBECBAD44CEA0",
+      "PreviousTxnLgrSeq": 12764447
+     }
+    }
+   ],
+   "TransactionIndex": 0,
+   "TransactionResult": "tesSUCCESS"
+  },
+  "status": "success",
+  "validated": true
+ },
+ "txWithHookName": {
+  "Account": "rKQpd83hDpdyNGRbAaHavqkFri6TwyVG7h",
+  "Fee": "39",
+  "HookName": "616363657074",
+  "LastLedgerSequence": 12764497,
+  "NetworkID": 21338,
+  "Sequence": 844072033,
+  "SigningPubKey": "02A06611A3B54D9E8168B11785AD752191E9518477EB024C5543C81283B6C1DF87",
+  "TransactionType": "Invoke",
+  "TxnSignature": "3045022100AFB2C6DBE6E58E2814B97647C301DD9E2CAD7D3AB0C5AE6A38DB78916CC10BB602206E8B4780F7F10F94CE27A7684F605DBB6A21ACA7C8005EBD87891D935BB4B6AB",
+  "ctid": "C0C2C53F0000535A",
+  "date": 844072133,
+  "hash": "BD79993A133D6784A097F865DE3EAFF3324519EF7B83BB0666055EEFD17ED540",
+  "inLedger": 12764479,
+  "ledger_index": 12764479,
+  "meta": {
+   "AffectedNodes": [
+    {
+     "ModifiedNode": {
+      "FinalFields": {
+       "Account": "rKQpd83hDpdyNGRbAaHavqkFri6TwyVG7h",
+       "AccountIndex": "6f01",
+       "Balance": "999897317",
+       "Flags": 0,
+       "OwnerCount": 1,
+       "Sequence": 844072034,
+       "TouchCount": "3"
+      },
+      "LedgerEntryType": "AccountRoot",
+      "LedgerIndex": "64998230C4919E4B179AB5E87E938C7FBE30F147A3C35695A01E7C48265A7A5A",
+      "PreviousFields": {
+       "Balance": "999897356",
+       "Sequence": 844072033,
+       "TouchCount": "2"
+      },
+      "PreviousTxnID": "8F67F38049C10DA6F364E86DB1FDD9B2718759DA8DCF297EEDCCEB3B8BF2C4D1",
+      "PreviousTxnLgrSeq": 12764449
+     }
+    }
+   ],
+   "HookExecutions": [
+    {
+     "HookExecution": {
+      "Flags": 1,
+      "HookAccount": "rKQpd83hDpdyNGRbAaHavqkFri6TwyVG7h",
+      "HookEmitCount": 0,
+      "HookExecutionIndex": 0,
+      "HookHash": "68A7D6BD77FB98A7E05E0BFD12180352903F131B2780F848267C37DC0837707C",
+      "HookInstructionCount": "d",
+      "HookResult": 3,
+      "HookReturnCode": "0",
+      "HookReturnString": "",
+      "HookStateChangeCount": 0
+     }
+    }
+   ],
+   "TransactionIndex": 0,
+   "TransactionResult": "tesSUCCESS"
+  },
+  "status": "success",
+  "validated": true
+ }
+}

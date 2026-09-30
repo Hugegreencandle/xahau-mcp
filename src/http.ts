@@ -186,7 +186,7 @@ const server = http.createServer(async (req, res) => {
         if (!isHex(body.candidateCode)) return send(res, 400, { error: "candidateCode must be even-length hexadecimal" });
         const acct = String((tx as Record<string, unknown>).Account ?? "");
         if (!validateAddress(acct).valid) return send(res, 400, { error: "candidateCode requires a valid tx.Account r-address" });
-        candidateHooks = { [acct]: { createCodeHex: body.candidateCode, hookOn: body.candidateHookOn, namespace: body.candidateNamespace } };
+        candidateHooks = { [acct]: { createCodeHex: body.candidateCode, hookOn: body.candidateHookOn, namespace: body.candidateNamespace, hookName: body.candidateHookName } };
       }
       const opts: Record<string, unknown> = {
         // isolate every hook execution in a worker so a malicious candidate (or a

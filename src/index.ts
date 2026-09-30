@@ -41,6 +41,7 @@ import { diagnoseFailedTx } from "./diagnose.js";
 import { traceTransactionStakeholders, verifyDoubleThreading, auditAccountRemarks } from "./audit.js";
 import { decodeGovernance } from "./governanceDecode.js";
 import { simulateTransaction, staticStakeholders } from "./simulate.js";
+import { requiredHookName, hookNameText } from "./hookname.js";
 import { computeHookStateCost } from "./hookstate.js";
 import { simDeps } from "./simdeps.js";
 import { readFileSync, existsSync } from "node:fs";
@@ -110,7 +111,7 @@ server.registerTool("get_account_objects", {
 });
 
 server.registerTool("get_account_hooks", {
-  description: "The Hooks installed on an account, with each HookOn bitmap decoded to the transaction types it fires on. Read-only.",
+  description: "The Hooks installed on an account, with each HookOn bitmap decoded to the transaction types it fires on, and any HookName (a named hook fires only for transactions carrying the matching HookName). Read-only.",
   inputSchema: { address: z.string().min(25), network: NET },
 }, async ({ address, network }) => {
   try {
@@ -121,9 +122,19 @@ server.registerTool("get_account_hooks", {
       const h = e.Hook ?? {};
       return { position: i, hookHash: h.HookHash ?? null, hookOn: h.HookOn ?? null,
         hookOnDecoded: h.HookOn ? decodeHookOn(h.HookOn).firesOn : null,
-        namespace: h.HookNamespace ?? null, parameters: h.HookParameters ?? [], grants: h.HookGrants ?? [] };
+        namespace: h.HookNamespace ?? null, parameters: h.HookParameters ?? [], grants: h.HookGrants ?? [],
+        // Named hooks (Transactor.cpp:1357-1369): a non-empty HookName means this hook fires ONLY
+        // for transactions carrying the byte-identical HookName, whatever HookOn says.
+        ...(() => {
+          const req = requiredHookName(h);
+          return req.hex
+            ? { hookName: req.hex, hookNameText: hookNameText(req.hex), firesOnlyWithHookName: true,
+                hookNameNote: `fires only for transactions carrying HookName ${req.hex}; a tx without it (or with a different name) skips this hook even if HookOn matches` }
+            : { hookName: null, firesOnlyWithHookName: false };
+        })() };
     });
-    return ok(`${address}: ${hooks.length} hook(s) installed`, { address, hooks });
+    const named = hooks.filter((x: any) => x.firesOnlyWithHookName).length;
+    return ok(`${address}: ${hooks.length} hook(s) installed${named ? ` (${named} named — fire only when the tx carries the matching HookName)` : ""}`, { address, hooks });
   } catch (e) { return fail((e as Error).message); }
 });
 
