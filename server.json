@@ -1,20 +1,19 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Hugegreencandle/xahau-mcp",
-  "description": "First MCP for the Xahau network — offline Hook WASM VM + static analyzer, read-only ledger tools.",
+  "description": "First MCP for the Xahau network \u2014 offline Hook WASM VM + static analyzer, read-only ledger tools.",
   "title": "Xahau MCP",
   "websiteUrl": "https://github.com/Hugegreencandle/xahau-mcp",
   "repository": {
     "url": "https://github.com/Hugegreencandle/xahau-mcp",
     "source": "github"
   },
-  "version": "2.0.1",
+  "version": "2.1.0",
   "packages": [
     {
-      "registryType": "mcpb",
-      "identifier": "https://github.com/Hugegreencandle/xahau-mcp/releases/download/v2.0.1/xahau-mcp-2.0.1.mcpb",
-      "fileSha256": "c19605cfb460604257b9aec20a22ff01c0c46663bdea1688d73c967ebe1bc50a",
-      "version": "2.0.1",
+      "registryType": "npm",
+      "identifier": "xahau-mcp",
+      "version": "2.1.0",
       "transport": {
         "type": "stdio"
       },
