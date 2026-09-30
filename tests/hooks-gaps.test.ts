@@ -68,7 +68,7 @@ describe("staticStakeholders", () => {
     // an EscrowFinish with no Owner is still flagged partial (conservative), with the reason
     const e = staticStakeholders({ TransactionType: "EscrowFinish", Account: A });
     expect(e.partial).toBe(true);
-    expect(e.notes.join(" ")).toMatch(/no Owner field/);
+    expect(e.notes.join(" ")).toMatch(/no Owner r-address/);
   });
 
   it("does not duplicate the originator if it also appears as a field", () => {

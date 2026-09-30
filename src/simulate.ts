@@ -90,7 +90,12 @@ export function escrowOwnerTsh(tx: Record<string, unknown>): { owner: string | n
   const owner = typeof tx.Owner === "string" ? tx.Owner : undefined;
   const destNote = `${txType}: the escrow's Destination is also a ${txType === "EscrowFinish" ? "STRONG" : "WEAK"} stakeholder (applyHook.cpp:419-420), but it is stored on the Escrow ledger object — not derivable from the tx. Incomplete without a ledger read.`;
   if (!owner) {
-    return { owner: null, notes: [`${txType}: no Owner field — xahaud computes NO stakeholders (applyHook.cpp:390-391, :426-428) and the tx is malformed (Owner is required)`] };
+    return { owner: null, notes: [`${txType}: no Owner r-address — xahaud computes NO stakeholders (applyHook.cpp:390-391, :426-428) and the tx is malformed (Owner is required)`] };
+  }
+  if (tx.EscrowID === undefined && tx.OfferSequence === undefined) {
+    // neither locator: applyHook returns no stakeholders (:397-398, :426-428); preflight rejects it
+    // (Escrow.cpp:468-472, temMALFORMED under fixXahauV1)
+    return { owner: null, notes: [`${txType}: neither OfferSequence nor EscrowID — xahaud computes NO stakeholders (applyHook.cpp:397-398) and preflight returns temMALFORMED (Escrow.cpp:468-472)`] };
   }
   if (tx.EscrowID !== undefined) {
     return { owner: null, notes: [

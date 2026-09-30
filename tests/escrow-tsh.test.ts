@@ -47,7 +47,7 @@ describe("staticStakeholders — escrow owner from tx.Owner", () => {
     const { Owner: _o, ...noOwner } = finish;
     const r = staticStakeholders(noOwner);
     expect(r.stakeholders.map((s) => s.account)).toEqual([FINISHER]);
-    expect(r.notes.join(" ")).toMatch(/no Owner field/);
+    expect(r.notes.join(" ")).toMatch(/no Owner r-address/);
   });
 });
 
@@ -87,5 +87,18 @@ describe("simulate_transaction — the escrow owner's hook runs STRONG and can r
     const s = await simulateTransaction({ ...byId, EscrowID: "AB".repeat(32) }, deps);
     expect(s.hookRuns.find((r) => r.account === OWNER)).toBeUndefined();
     expect(s.notes.join(" ")).toMatch(/EscrowID/);
+  });
+});
+
+describe("hostile self-review regressions (2.2.0)", () => {
+  it("neither OfferSequence nor EscrowID: xahaud computes no stakeholders (applyHook.cpp:397-398) — owner NOT added", () => {
+    const { OfferSequence: _s, ...bare } = finish;
+    const r = staticStakeholders(bare);
+    expect(r.stakeholders.map((s) => s.account)).toEqual([FINISHER]);
+    expect(r.notes.join(" ")).toMatch(/temMALFORMED/);
+  });
+  it("non-string Owner is treated as absent, not coerced", () => {
+    const r = staticStakeholders({ ...finish, Owner: 5 });
+    expect(r.stakeholders.map((s) => s.account)).toEqual([FINISHER]);
   });
 });

@@ -97,8 +97,8 @@ export function txHookNamePreflight(tx: Record<string, unknown>): { status: "PAS
   if (!t.present) return null;
   const gate = "requires the NamedHooks amendment (Transactor.cpp:152-156: temMALFORMED without it) — check get_amendment_status for this network";
   if (t.invalid) {
-    const hint = typeof tx.HookName === "string" ? ` e.g. "${tx.HookName}" → ${Buffer.from(tx.HookName, "utf-8").toString("hex").toUpperCase()}` : "";
-    return { status: "FAIL", detail: `HookName must be hex-encoded bytes (Blob);${hint}. Not serializable as given` };
+    const hint = typeof tx.HookName === "string" ? ` (e.g. "${tx.HookName}" → ${Buffer.from(tx.HookName, "utf-8").toString("hex").toUpperCase()})` : "";
+    return { status: "FAIL", detail: `HookName must be hex-encoded bytes (Blob)${hint}; not serializable as given` };
   }
   const bytes = t.hex!.length / 2;
   if (bytes !== 0 && (bytes < 4 || bytes > 16)) {
