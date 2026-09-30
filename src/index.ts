@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // xahau-mcp — Model Context Protocol server for the Xahau network.
-// The first MCP with offline Hook intelligence (WASM inspection + a Hooks-specific
+// Offline Hook intelligence (WASM inspection + a Hooks-specific
 // static-analysis rule engine), plus read-only ledger, codec, governance and unsigned-tx tooling.
 // Strictly read-only toward the network; never signs or submits; no key custody.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -527,7 +527,7 @@ server.registerTool("hook_dry_run", {
 });
 
 server.registerTool("execute_hook", {
-  description: "GROUNDBREAKING: actually RUN a Hook's real WebAssembly bytecode in a local VM against a simulated transaction + ledger state, and report the true accept/rollback decision, return code/string, state writes, emitted txns and execution trace. The first dev-accessible Hook simulator that needs no xahaud node. Implements a subset of the Hook API; unsupported calls are recorded (fidelity LOCAL_VM, never faked).",
+  description: "Actually RUN a Hook's real WebAssembly bytecode in a local VM against a simulated transaction + ledger state, and report the true accept/rollback decision, return code/string, state writes, emitted txns and execution trace. Needs no xahaud node. Implements a subset of the Hook API; unsupported calls are recorded (fidelity LOCAL_VM, never faked).",
   inputSchema: {
     ...WASM_IN,
     txType: z.string().optional().describe("originating tx type, e.g. \"Payment\""),

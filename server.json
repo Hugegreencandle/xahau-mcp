@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Hugegreencandle/xahau-mcp",
-  "description": "First MCP for the Xahau network \u2014 offline Hook WASM VM + static analyzer, read-only ledger tools.",
+  "description": "MCP server for the Xahau network \u2014 offline Hook WASM VM + static analyzer, read-only ledger tools.",
   "title": "Xahau MCP",
   "websiteUrl": "https://github.com/Hugegreencandle/xahau-mcp",
   "repository": {
