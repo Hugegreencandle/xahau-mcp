@@ -81,7 +81,7 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 | Tool | Purpose |
 |---|---|
 | `execute_hook` | **Run the real Hook bytecode in a local VM** against a simulated tx/state → actual accept/rollback, return code, state writes, emits, trace (`LOCAL_VM`). |
-| `simulate_transaction` | **PRE-SIGN FLIGHT SIMULATOR** — predict an unsigned tx's fate: originator + stakeholder hook chains (order canonical from xahaud `Transactor.cpp`/`applyHook.cpp`) run as real bytecode against live state; per-hook verdicts, decoded emits, state writes, static engine preflights, scam score. |
+| `simulate_transaction` | **PRE-SIGN FLIGHT SIMULATOR** — predict an unsigned tx's fate: originator + stakeholder hook chains (order canonical from xahaud `Transactor.cpp`/`applyHook.cpp`) run as real bytecode against live state; per-hook verdicts, decoded emits, state writes, static engine preflights, scam score. Named hooks: a hook installed with a `HookName` runs only when the tx carries the same `HookName` (otherwise reported `not fired: hook requires HookName …`). EscrowFinish/EscrowCancel: the escrow owner (`Owner` + `OfferSequence`) runs as a strong stakeholder; the destination is flagged, not guessed. |
 | `what_if` | **TIME MACHINE** — fetch a real historical tx, apply your overrides, re-simulate at its original ledger. Reproduces the real reward claim's `GenesisMint` to the drop (test-locked). |
 | `fuzz_hook` | **Differential fuzzing**: sweep many generated transactions through the VM to map the hook's accept/rollback **decision boundary** (which tx types / amounts it accepts vs rejects). |
 | `annotate_hook_trace` | **Decode an `execute_hook` `trace[]`** into human-readable values by byte-width: canonical XFL float (`definite`), int64/native-drops (both endians), UInt32 + Ripple-epoch date, candidate account-id → r-address (`possible`), 32-byte hash. Raw hex always preserved; offline. |
@@ -124,7 +124,7 @@ numbers, and the canonical sources (xahaud genesis hooks, evernode-js-client) ar
 | Tool | Purpose |
 |---|---|
 | `xahau_server_info` · `get_account_info` · `get_account_objects` | Node/account reads. |
-| `get_account_hooks` · `get_hook_definition` · `get_hook_state` | Hook reads. |
+| `get_account_hooks` · `get_hook_definition` · `get_hook_state` | Hook reads. `get_account_hooks` shows each hook's `HookName` (a named hook fires only for txs carrying that name). |
 | `get_transaction` · `get_ledger` · `get_fee` | Tx (with `HookExecutions`) · ledger · current network fee. |
 | `get_account_lines` · `get_account_offers` · `get_account_uritokens` | Trustlines · DEX offers · URITokens (NFTs, URI decoded). |
 | `explain_account` | **One-call plain-English account snapshot** — balance, key safety, hooks, trustlines, Evernode leases, recent activity (5 serial reads). |
@@ -240,7 +240,7 @@ On platforms that build the *last* Dockerfile stage (Railway, etc.), use `Docker
 
 | Method · path | Body | Returns |
 |---|---|---|
-| `POST /simulate` | `{ tx, network?, ledgerIndex?, candidateCode? }` | full `Simulation` — per-hook accept/rollback, decoded emits, state writes, static preflights |
+| `POST /simulate` | `{ tx, network?, ledgerIndex?, candidateCode?, candidateHookOn?, candidateNamespace?, candidateHookName? }` | full `Simulation` — per-hook accept/rollback, decoded emits, state writes, static preflights |
 | `POST /what-if` | `{ txHash, overrides?, network? }` | `Simulation` of a real historical tx re-run (with your overrides) at its original ledger |
 | `POST /execute` | `{ wasmHex, txType?, otxnFields?, hookAccountId?, state?, … }` | `SandboxResult` — run a hook's bytecode in isolation (offline, no RPC) |
 | `POST /analyze` | `{ wasmHex, hookOn?, namespace?, … }` | `{ findings, summary }` — the static rule engine (offline, instant, the cheap top-of-funnel) |
