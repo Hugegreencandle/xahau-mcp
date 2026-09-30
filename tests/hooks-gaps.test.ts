@@ -60,9 +60,15 @@ describe("staticStakeholders", () => {
   });
 
   it("flags partial for tx types needing ledger lookups", () => {
-    const r = staticStakeholders({ TransactionType: "EscrowFinish", Account: A });
+    // EscrowFinish/EscrowCancel moved to refined handling in 2.2.0 (tests/escrow-tsh.test.ts);
+    // CheckCash still takes the generic ledger-object path.
+    const r = staticStakeholders({ TransactionType: "CheckCash", Account: A });
     expect(r.partial).toBe(true);
     expect(r.notes.join(" ")).toMatch(/ledger objects/);
+    // an EscrowFinish with no Owner is still flagged partial (conservative), with the reason
+    const e = staticStakeholders({ TransactionType: "EscrowFinish", Account: A });
+    expect(e.partial).toBe(true);
+    expect(e.notes.join(" ")).toMatch(/no Owner field/);
   });
 
   it("does not duplicate the originator if it also appears as a field", () => {

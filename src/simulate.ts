@@ -60,10 +60,50 @@ export const TSH_TABLE: Record<string, { field: string; strong: boolean; amountI
   // no extra stakeholders:
   AccountSet: [], OfferCancel: [], TicketCreate: [], SetHook: [], OfferCreate: [],
 };
-// stakeholders that would need ledger-object lookups we don't perform — flagged, not guessed
+// stakeholders that would need ledger-object lookups we don't perform — flagged, not guessed.
+// EscrowFinish/EscrowCancel stay here (their Destination, and the owner when EscrowID is used, need
+// the escrow object) but are refined by escrowOwnerTsh(): the Owner from tx.Owner is resolved.
 export const TSH_PARTIAL = new Set(["EscrowFinish", "EscrowCancel", "CheckCash", "CheckCancel", "PaymentChannelFund", "PaymentChannelClaim", "URITokenBuy", "URITokenBurn", "URITokenCancelSellOffer", "NFTokenAcceptOffer", "NFTokenCancelOffer", "NFTokenBurn", "NFTokenCreateOffer"]);
 
 type TshRow = { field: string; strong: boolean; amountIssuerOf?: boolean; arrayAccountOf?: { wrapper: string; account: string } };
+
+/** EscrowFinish / EscrowCancel stakeholders — xahaud applyHook.cpp:385-441 (getTransactionalStakeHolders,
+ *  at 20ec473be). Both paths (fixXahauV1 :388-422 and legacy :425-441) read the escrow object and add
+ *    - its source/owner (escrow sfAccount) as STRONG for BOTH Finish and Cancel  (:416 / :436), and
+ *    - its destination as STRONG for Finish, WEAK for Cancel                       (:419-420 / :437-439).
+ *  NOTE: the Xahau docs table (Xahau/Xahau-Docs concepts/weak-and-strong.md, rows EscrowCancel /
+ *  EscrowFinish) lists only the destination and omits the owner. We follow the code, not the docs.
+ *
+ *  What is derivable from the tx alone, and what is not:
+ *   - With OfferSequence (and no EscrowID) the escrow keylet is keylet::escrow(Owner, OfferSequence),
+ *     so the escrow's sfAccount IS tx.Owner (the keylet hashes the owner). We add Owner as STRONG.
+ *     Conditional on the escrow existing: if it does not, applyHook returns NO stakeholders at all
+ *     (:406-408 / :433-434) and the tx fails tecNO_TARGET (Escrow.cpp:521-522).
+ *   - With EscrowID the keylet is the raw ID (:400-402) and nothing ties it to tx.Owner (EscrowFinish
+ *     doApply uses the ID directly too, Escrow.cpp:517-518), so the stakeholder is whoever owns that
+ *     escrow object. Not derivable without a ledger read: flagged, not guessed.
+ *   - The destination always needs the escrow object: flagged (partial), not guessed.
+ *   - The originator is never its own TSH (ADD_TSH skips otxnAcc, applyHook.cpp:49-50). */
+export function escrowOwnerTsh(tx: Record<string, unknown>): { owner: string | null; notes: string[] } {
+  const txType = String(tx.TransactionType ?? "");
+  const sender = typeof tx.Account === "string" ? tx.Account : undefined;
+  const owner = typeof tx.Owner === "string" ? tx.Owner : undefined;
+  const destNote = `${txType}: the escrow's Destination is also a ${txType === "EscrowFinish" ? "STRONG" : "WEAK"} stakeholder (applyHook.cpp:419-420), but it is stored on the Escrow ledger object — not derivable from the tx. Incomplete without a ledger read.`;
+  if (!owner) {
+    return { owner: null, notes: [`${txType}: no Owner field — xahaud computes NO stakeholders (applyHook.cpp:390-391, :426-428) and the tx is malformed (Owner is required)`] };
+  }
+  if (tx.EscrowID !== undefined) {
+    return { owner: null, notes: [
+      `${txType}: identified by EscrowID, so the escrow owner (a STRONG stakeholder, applyHook.cpp:416) is the escrow object's Account, which xahaud does not check against tx.Owner — not derivable without a ledger read; owner hook NOT predicted`,
+      destNote,
+    ] };
+  }
+  const notes = [destNote, `${txType}: Owner ${owner} is a STRONG stakeholder only if escrow (Owner, OfferSequence ${String(tx.OfferSequence ?? "?")}) exists — otherwise xahaud runs no stakeholder hooks and the tx fails tecNO_TARGET`];
+  if (owner === sender) return { owner: null, notes: [destNote] }; // owner acting on own escrow: originator chain already covers it
+  if (txType === "EscrowFinish") notes.push(`EscrowFinish by a third party: the escrow owner's hook runs STRONG and can roll back (reject) this finish → tecHOOK_REJECTED`);
+  return { owner, notes };
+}
+const ESCROW_TSH = new Set(["EscrowFinish", "EscrowCancel"]);
 
 /** Resolve a TSH_TABLE row into the concrete stakeholder account string(s) on a given tx.
  *  Handles top-level account fields, amount-object issuers, and arrays of wrapper objects. */
@@ -114,6 +154,11 @@ export function staticStakeholders(tx: Record<string, unknown>) {
       partial = true;
       notes.push("Remit: each transferred URIToken's issuer is also a (weak) stakeholder, but the issuer is stored on the URIToken ledger object — not derivable from URITokenIDs alone. Incomplete without a ledger read.");
     }
+  } else if (ESCROW_TSH.has(txType)) {
+    const e = escrowOwnerTsh(tx);
+    if (e.owner) stakeholders.push({ account: e.owner, role: "TSH:Owner", strong: true });
+    partial = true; // destination (and, with EscrowID, the owner) still needs the escrow object
+    notes.push(...e.notes);
   } else if (TSH_PARTIAL.has(txType)) {
     partial = true;
     notes.push(`${txType}: additional stakeholders come from ledger objects (escrow/check/offer owners) not derivable statically — incomplete without a ledger read`);
@@ -376,6 +421,10 @@ export async function simulateTransaction(
         if (acct !== sender) stakeholders.push({ account: acct, role: `TSH:${r.field} (${r.strong ? "strong" : "weak"})`, strong: r.strong, outgoing: false });
       }
     }
+  } else if (ESCROW_TSH.has(txType)) {
+    const e = escrowOwnerTsh(tx as Record<string, unknown>);
+    if (e.owner) stakeholders.push({ account: e.owner, role: "TSH:Owner (strong)", strong: true, outgoing: false });
+    for (const n of e.notes) notes.push(`${n}${n.includes("Destination") ? " Its hooks are NOT simulated (honest gap)." : ""}`);
   } else if (TSH_PARTIAL.has(txType)) {
     notes.push(`${txType}: additional stakeholders are derived from ledger objects (escrow/check/offer owners) which this simulator does not auto-collect — their hooks are NOT simulated (honest gap)`);
   } else if (txType) {
