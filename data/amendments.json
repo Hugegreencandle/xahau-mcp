@@ -1,5 +1,5 @@
 {
-  "_note": "Known amendment names for Xahau + ported XRPL amendments. Amendment ID = SHA512-Half(ASCII name), uppercase hex. Used to resolve on-ledger amendment IDs to human names; unknown IDs degrade to their raw hash. Add new names here as amendments are introduced — no code change needed. Verified against live mainnet Amendments object 2026-06-15 (60/63 enabled IDs resolved; the 3 unnamed are recently-ported XRPL amendments — add their names here to resolve them, no code change needed).",
+  "_note": "Known amendment names for Xahau + ported XRPL amendments. Amendment ID = SHA512-Half(ASCII name), uppercase hex. Used to resolve on-ledger amendment IDs to human names; unknown IDs degrade to their raw hash. Add new names here as amendments are introduced — no code change needed. Verified against live mainnet Amendments object 2026-06-15 (60/63 enabled IDs resolved; the 3 unnamed are recently-ported XRPL amendments — add their names here to resolve them, no code change needed). 2026-09-30: added 21 names from xahaud features.macro (local 20ec473be + upstream dev 0f3258d23: fix20260929, HookOnV2_1, OnChainManifests); IDs checked against live `feature` RPC on xahau.network and xahau-test.net — every name either node reports now resolves. Deliberately NOT added: fix20261001 (renamed to fix20260929 upstream, 3fbeb130f) and fixHookAPISType (folded into fix20261001, PR #835) — neither is in current source nor known to either network.",
   "names": [
     "XahauGenesis", "Hooks", "HooksUpdate1", "HookCanEmit", "ExtendedHookState",
     "Remit", "Remarks", "Touch", "Cron", "ZeroB2M", "Import", "URIToken",
@@ -27,7 +27,13 @@
     "fixInnerObjTemplate", "fixAMMOverflowOffer", "PriceOracle", "fixEmptyDID",
     "fixXChainRewardRounding", "fixPreviousTxnID", "fixAMMv1_1", "NFTokenMintOffer",
     "fixReducedOffersV2", "fixEnforceNFTokenTrustline", "fixInnerObjTemplate2",
-    "InvariantsV1_1", "fixNFTokenPageLinks", "fixUNLReport"
+    "InvariantsV1_1", "fixNFTokenPageLinks", "fixUNLReport",
+    "NamedHooks", "HooksUpdate2", "HookOnV2", "HookOnV2_1", "HookAPISerializedType240",
+    "IOURewardClaim", "BalanceRewards", "OnChainManifests",
+    "fixHookMap", "fixGuardDepth32", "fixIOULockedBalanceInvariant", "fixImportIssuer",
+    "fixHookAPI20251128", "fix20260929",
+    "XRPFees", "AMMClawback", "PermissionedDomains", "DynamicNFT", "Credentials",
+    "MPTokensV1", "DID"
   ],
   "categories": {
     "_doc": "Optional grouping hints for Xahau-native amendments (see Xahau docs Known Amendments).",

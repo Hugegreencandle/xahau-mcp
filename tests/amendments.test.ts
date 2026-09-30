@@ -92,3 +92,43 @@ describe("computeDiff", () => {
     expect(d.onlyOnB).toHaveLength(0);
   });
 });
+
+// 2.2.0 — the name table must cover every amendment the live networks know. Literal fixture:
+// read-only `feature` + Amendments-object captures from xahau.network / xahau-test.net, 2026-09-30.
+import { readFileSync as readFixture } from "node:fs";
+const LIVE = JSON.parse(readFixture(new URL("./fixtures-amendments/live-2026-09-30.json", import.meta.url), "utf8"));
+
+describe("live coverage (fixture 2026-09-30)", () => {
+  for (const net of ["mainnet", "testnet"] as const) {
+    it(`every amendment the ${net} node reports via feature RPC resolves to its name`, () => {
+      const feats = LIVE[net].feature.features as Record<string, { name: string }>;
+      const missing = Object.entries(feats).filter(([id, f]) => nameFor(id) !== f.name).map(([, f]) => f.name);
+      expect(missing).toEqual([]);
+    });
+    it(`every ENABLED amendment on ${net} (on-ledger Amendments object) is named`, () => {
+      const s = computeStatus(LIVE[net].amendmentsObject.node, net);
+      expect(s.enabledCount).toBeGreaterThan(70);
+      expect(s.unnamedCount).toBe(0);
+    });
+  }
+
+  it("feature-RPC IDs equal SHA512-Half(name) for the names added in 2.2.0", () => {
+    const feats = LIVE.mainnet.feature.features as Record<string, { name: string }>;
+    for (const n of ["NamedHooks", "HookOnV2", "HooksUpdate2", "fixHookMap", "fixHookAPI20251128", "XRPFees", "BalanceRewards"]) {
+      const id = Object.keys(feats).find((k) => feats[k].name === n)!;
+      expect(amendmentId(n)).toBe(id);
+    }
+    // literal vectors (from the mainnet feature RPC), so the check does not depend on the fixture parse
+    expect(amendmentId("NamedHooks")).toBe("5A7EDF552D4015D082B1D4B179E6994C81BD20338EF263AA75E9B29CB702A48F");
+    expect(amendmentId("fixHookMap")).toBe("99DEA90A03A9EDE1472561AD21781435AF53D6FFFC6C38DB419C61FB777D54AC");
+  });
+
+  it("source-only upstream names (not yet on any network) are known", () => {
+    for (const n of ["HookOnV2_1", "fix20260929", "OnChainManifests"]) expect(nameFor(amendmentId(n))).toBe(n);
+  });
+
+  it("superseded pre-release names are NOT in the table (renamed/folded upstream, unknown to both networks)", () => {
+    expect(nameFor(amendmentId("fix20261001"))).toBeNull();
+    expect(nameFor(amendmentId("fixHookAPISType"))).toBeNull();
+  });
+});

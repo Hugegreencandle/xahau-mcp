@@ -1,0 +1,1295 @@
+{
+ "_source": "read-only JSON-RPC 2026-09-30: `feature` and ledger_entry(Amendments singleton 7DB0788C...) on https://xahau.network (mainnet) and https://xahau-test.net (testnet). Verbatim results.",
+ "_captured": "2026-09-30",
+ "mainnet": {
+  "feature": {
+   "features": {
+    "00C1FC4A53E60AB02C864641002B3172F38677E29C26C5406685179B37E1EDAC": {
+     "enabled": true,
+     "name": "RequireFullyCanonicalSig",
+     "supported": true
+    },
+    "0134BEED89A1A1D8B2663CF9DFCDB9024A060706FDFF147AA4D203749AFD5932": {
+     "enabled": true,
+     "name": "IOUIssuerWeakTSH",
+     "supported": true
+    },
+    "0285B7E5E08E1A8E4C15636F0591D87F73CB6A7B6452A932AD72BBC8E5D1CBE3": {
+     "enabled": false,
+     "name": "fixNFTokenDirV1",
+     "supported": true
+    },
+    "03BDC0099C4E14163ADA272C1B6F6FABB448CC3E51F522F978041E4B57D9158C": {
+     "enabled": false,
+     "name": "fixNFTokenReserve",
+     "supported": true
+    },
+    "07D43DCE529B15A10827E5E04943B496762F9A88E3268269D69C44BE49E21104": {
+     "enabled": false,
+     "name": "Escrow",
+     "supported": true
+    },
+    "08DE7D96082187F6E6578530258C77FAABABE4C20474BDB82F04B021F1A68647": {
+     "enabled": false,
+     "name": "PayChan",
+     "supported": true
+    },
+    "0D8BF22FF7570D58598D1EF19EBB6E142AD46E59A223FD3816262FBB69345BEA": {
+     "enabled": true,
+     "name": "Remit",
+     "supported": true
+    },
+    "1562511F573A19AE9BD103B5D6B9E01B3B46805AEC5D3C4805C902B514399146": {
+     "enabled": false,
+     "name": "CryptoConditions",
+     "supported": true
+    },
+    "157D2D480E006395B76F948E3E07A45A05FE10230D88A7993C71F97AE4B1F2D1": {
+     "enabled": true,
+     "name": "Checks",
+     "supported": true
+    },
+    "15D61F0C6DB6A2F86BCF96F1E2444FEC54E705923339EC175BD3E517C8B3FF91": {
+     "enabled": true,
+     "name": "fixDisallowIncomingV1",
+     "supported": true
+    },
+    "17C342EA7EFA25D809FC0DD7BC885190DAF54582E5A683ED0BBA200877A0BFDE": {
+     "enabled": true,
+     "name": "fixHookAPI20251128",
+     "supported": true
+    },
+    "1D3463A5891F9E589C5AE839FFAC4A917CE96197098A1EF22304E1BC5B98A454": {
+     "enabled": false,
+     "name": "fix1528",
+     "supported": true
+    },
+    "1F4AFA8FA1BC8827AD4C0F682C03A8B671DCDF6B5C4DE36D44243A684103EF88": {
+     "enabled": true,
+     "name": "HardenedValidations",
+     "supported": true
+    },
+    "215181D23BF5C173314B5FDB9C872C92DE6CC918483727DE037C0C13E7E6EE9D": {
+     "enabled": true,
+     "name": "fixXahauV2",
+     "supported": true
+    },
+    "22DD15A56DFD886A7B7D37B656DC4F974BB0FE4BECB83055B01AE8B5A8466D34": {
+     "enabled": true,
+     "name": "fixProvisionalDoubleThreading",
+     "supported": true
+    },
+    "25BA44241B3BD880770BFA4DA21C7180576831855368CBEC6A3154FDE4A7676E": {
+     "enabled": true,
+     "name": "fix1781",
+     "supported": true
+    },
+    "27CD95EE8E1E5A537FF2F89B6CEB7C622E78E9374EBD7DCBEDFAE21CD6F16E0A": {
+     "enabled": true,
+     "name": "fixReducedOffersV1",
+     "supported": true
+    },
+    "2CD5286D8D687E98B41102BDD797198E81EA41DF7BD104E6561FEB104EFF2561": {
+     "enabled": true,
+     "name": "fixTakerDryOfferRemoval",
+     "supported": true
+    },
+    "2DC64F1D6FFA1C8ACC79D04AD099154AA6C2665A7AD002C00ED36A8C90ABF1E7": {
+     "enabled": false,
+     "name": "HookOnV2",
+     "supported": true
+    },
+    "2E2FB9CF8A44EB80F4694D38AADAE9B8B7ADAFD2F092E10068E61C98C4F092B0": {
+     "enabled": false,
+     "name": "fixUniversalNumber",
+     "supported": true
+    },
+    "3012E8230864E95A58C60FD61430D7E1B4D3353195F2981DC12B0C7C0950FFAC": {
+     "enabled": true,
+     "name": "FlowCross",
+     "supported": true
+    },
+    "30CD365592B8EE40489BA01AE2F7555CAC9C983145871DC82A42A31CF5BAE7D9": {
+     "enabled": false,
+     "name": "DeletableAccounts",
+     "supported": true
+    },
+    "31E0DA76FB8FB527CADCDF0E61CB9C94120966328EFA9DCA202135BAF319C0BA": {
+     "enabled": true,
+     "name": "fixReducedOffersV2",
+     "supported": true
+    },
+    "32A122F1352A4C7B3A6D790362CC34749C5E57FCE896377BFDC6CCD14F6CD627": {
+     "enabled": false,
+     "name": "NonFungibleTokensV1_1",
+     "supported": true
+    },
+    "3318EA0CF0755AF15DAC19F2B5C5BCBFF4B78BDD57609ACCAABE2C41309B051A": {
+     "enabled": true,
+     "name": "fixFillOrKill",
+     "supported": true
+    },
+    "36799EA497B1369B170805C078AEFE6188345F9B3E324C21E9CA3FF574E3C3D6": {
+     "enabled": false,
+     "name": "fixNFTokenNegOffer",
+     "supported": true
+    },
+    "3C43D9A973AA4443EF3FC38E42DD306160FBFFDAB901CD8BAA15D09F2597EB87": {
+     "enabled": false,
+     "name": "NonFungibleTokensV1",
+     "supported": true
+    },
+    "3CBC5C4E630A1B82380295CDA84B32B49DD066602E74E39B85EF64137FA65194": {
+     "enabled": true,
+     "name": "DepositPreauth",
+     "supported": true
+    },
+    "42426C4D4F1009EE67080A9B7965B44656D7714D104A72F9B4369F97ABF044EE": {
+     "enabled": false,
+     "name": "FeeEscalation",
+     "supported": true
+    },
+    "42EEA5E28A97824821D4EF97081FE36A54E9593C6E4F20CBAE098C69D2E072DC": {
+     "enabled": false,
+     "name": "fix1373",
+     "supported": true
+    },
+    "42F8B586B357ABBAAAA1C733C3E7D3B75761395340D0CDF600179E8737E22478": {
+     "enabled": true,
+     "name": "BalanceRewards",
+     "supported": true
+    },
+    "452F5906C46D46F407883344BFDD90E672B672C5E9943DB4891E3A34FEEEB9DB": {
+     "enabled": true,
+     "name": "fixSTAmountCanonicalize",
+     "supported": true
+    },
+    "47C3002ABA31628447E8E9A8B315FAA935CE30183F9A9B86845E469CA2CDC3DF": {
+     "enabled": true,
+     "name": "DisallowIncoming",
+     "supported": true
+    },
+    "4B8466415FAB32FFA89D9DCBE166A42340115771DF611A7160F8D7439C87ECD8": {
+     "enabled": true,
+     "name": "fixNSDelete",
+     "supported": true
+    },
+    "4C499D17719BB365B69010A436B64FD1A82AAB199FC1CEB06962EBD01059FB09": {
+     "enabled": true,
+     "name": "fixXahauV1",
+     "supported": true
+    },
+    "4C97EBA926031A7CF7D7B36FDE3ED66DDA5421192D63DE53FFB46E43B9DC8373": {
+     "enabled": false,
+     "name": "MultiSign",
+     "supported": true
+    },
+    "4D1C99993DD4167B272809227B7B024363F8EF5DB8F1A748618F47B6F38C31E7": {
+     "enabled": false,
+     "name": "HooksUpdate2",
+     "supported": true
+    },
+    "4F46DF03559967AC60F2EB272FEFE3928A7594A45FF774B87A7E540DB0F8F068": {
+     "enabled": true,
+     "name": "fixAmendmentMajorityCalc",
+     "supported": true
+    },
+    "532651B4FD58DF8922A49BA101AB3E996E5BFBF95A913B3E392504863E63B164": {
+     "enabled": false,
+     "name": "TickSize",
+     "supported": true
+    },
+    "56B241D7A43D40354D02A9DC4C8DF5C7A1F930D92A9035C4E12291B3CA3E1C2B": {
+     "enabled": true,
+     "name": "Clawback",
+     "supported": true
+    },
+    "586480873651E106F1D6339B0C4A8945BA705A777F3F4524626FF1FC07EFE41D": {
+     "enabled": true,
+     "name": "MultiSignReserve",
+     "supported": true
+    },
+    "58BE9B5968C4DA7C59BA900961828B113E5490699B21877DEF9A31E9D0FE5D5F": {
+     "enabled": true,
+     "name": "fix1623",
+     "supported": true
+    },
+    "5A7EDF552D4015D082B1D4B179E6994C81BD20338EF263AA75E9B29CB702A48F": {
+     "enabled": false,
+     "name": "NamedHooks",
+     "supported": true
+    },
+    "5B8E5D8F3D8687D3CE567FB5BDAED152204D195ED2EAEC346E3AA0607D51752A": {
+     "enabled": true,
+     "name": "fixRewardClaimFlags",
+     "supported": true
+    },
+    "5D08145F0A4983F23AFFFF514E83FAD355C5ABFBB6CAB76FB5BC8519FF5F33BE": {
+     "enabled": true,
+     "name": "fix1515",
+     "supported": true
+    },
+    "621A0B264970359869E3C0363A899909AAB7A887C8B73519E4ECF952D33258A8": {
+     "enabled": true,
+     "name": "fixPayChanRecipientOwnerDir",
+     "supported": true
+    },
+    "6781F8368C4771B83E8B821D88F580202BCB4228075297B19E4FDC5233F1EFDC": {
+     "enabled": false,
+     "name": "TrustSetAuth",
+     "supported": true
+    },
+    "67A34F2CF55BFC0F93AACD5B281413176FEE195269FA6D95219A2DF738671172": {
+     "enabled": true,
+     "name": "fix1513",
+     "supported": true
+    },
+    "6BA7A8FF26BB2387EE3020CB871A616C8DC15231F4E4207509DB0FA8750199D7": {
+     "enabled": true,
+     "name": "IOURewardClaim",
+     "supported": true
+    },
+    "6C92211186613F9647A89DFFBAB8F94C99D4C7E956D495270789128569177DA1": {
+     "enabled": false,
+     "name": "fix1512",
+     "supported": true
+    },
+    "6E739F4F8B07BED29FC9FF440DA3C301CD14A180DF45819F658FEC2F7DE31427": {
+     "enabled": true,
+     "name": "XahauGenesis",
+     "supported": true
+    },
+    "7117E2EC2DBF119CA55181D69819F1999ECEE1A0225A7FD2B9ED47940968479C": {
+     "enabled": true,
+     "name": "fix1571",
+     "supported": true
+    },
+    "717F060C0C237F122F8065781528B1CA047D82B4E787022984F26D7B997E3D9C": {
+     "enabled": true,
+     "name": "fix20250131",
+     "supported": true
+    },
+    "726F944886BCDF7433203787E93DD9AA87FAB74DFE3AF4785BA03BEFC97ADA1F": {
+     "enabled": false,
+     "name": "AMMClawback",
+     "supported": true
+    },
+    "73761231F7F3D94EC3D8C63D91BDD0D89045C6F71B917D1925C01253515A6669": {
+     "enabled": false,
+     "name": "fixNonFungibleTokensV1_2",
+     "supported": true
+    },
+    "740352F2412A9909880C23A559FCECEDA3BE2126FED62FC7660D628A06927F11": {
+     "enabled": true,
+     "name": "Flow",
+     "supported": true
+    },
+    "75A7E01C505DD5A179DFE3E000A9B6F1EDDEB55A12F95579A23E15B15DC8BE5A": {
+     "enabled": true,
+     "name": "ImmediateOfferKilled",
+     "supported": true
+    },
+    "763C37B352BE8C7A04E810F8E462644C45AFEAD624BF3894A08E5C917CF9FF39": {
+     "enabled": false,
+     "name": "fixEnforceNFTokenTrustline",
+     "supported": true
+    },
+    "7BB62DC13EC72B775091E9C71BF8CF97E122647693B50C5E87A80DFD6FCFAC50": {
+     "enabled": true,
+     "name": "fixPreviousTxnID",
+     "supported": true
+    },
+    "7CA0426E7F411D39BB014E57CD9E08F61DE1750F0D41FCD428D9FB80BB7596B0": {
+     "enabled": true,
+     "name": "ZeroB2M",
+     "supported": true
+    },
+    "7FE392C21A2880B3223A2CAF8DC59ADDAE5B03BD4B0500A1F63DF9893E852DBA": {
+     "enabled": true,
+     "name": "ExtendedHookState",
+     "supported": true
+    },
+    "8063140E9260799D6716756B891CEC3E7006C4E4F277AB84670663A88F94B9C4": {
+     "enabled": true,
+     "name": "fixPageCap",
+     "supported": true
+    },
+    "86E83A7D2ECE3AD5FA87AB2195AE015C950469ABF0B72EAACED318F74886AE90": {
+     "enabled": false,
+     "name": "CryptoConditionsSuite",
+     "supported": true
+    },
+    "88693F108C3CD8A967F3F4253A32DEF5E35F9406ACD2A11B88B11D90865763A9": {
+     "enabled": true,
+     "name": "fix240911",
+     "supported": true
+    },
+    "88FEC10C8272D690124E923FBB47A95013C6AA20D9B27B871A99790D05055421": {
+     "enabled": true,
+     "name": "fixXahauV3",
+     "supported": true
+    },
+    "89308AF3B8B10B7192C4E613E1D2E4D9BA64B2EE2D5232402AE82A6A7220D953": {
+     "enabled": true,
+     "name": "fixQualityUpperBound",
+     "supported": true
+    },
+    "8EC4304A06AF03BE953EA6EDA494864F6F3F30AA002BABA35869FBB8C6AE5D52": {
+     "enabled": true,
+     "name": "fixInvalidTxFlags",
+     "supported": true
+    },
+    "8F81B066ED20DAECA20DF57187767685EEF3980B228E0667A650BAF24426D3B4": {
+     "enabled": true,
+     "name": "fixCheckThreading",
+     "supported": true
+    },
+    "9000B5F96F9E129D1CB42F2B07AF4CEFEFBFDF49CFCD8B6FF46E719A3F19B436": {
+     "enabled": true,
+     "name": "HookCanEmit",
+     "supported": true
+    },
+    "919857E4B902A20216E4819B9BD9FD1FD19A66ECF63151C18A4C48C873DB9578": {
+     "enabled": true,
+     "name": "PaychanAndEscrowForTokens",
+     "supported": true
+    },
+    "93E516234E35E08CA689FA33A6D38E103881F8DCB53023F728C307AA89D515A7": {
+     "enabled": true,
+     "name": "XRPFees",
+     "supported": true
+    },
+    "94312150FFBA0E21B46244D7C4C6D66219C53C5F82FB7949F0832A6B56FB9631": {
+     "enabled": true,
+     "name": "Touch",
+     "supported": true
+    },
+    "955DF3FA5891195A9DAEFA1DDC6BB244B545DDE1BAA84CBB25D5F12A8DA68A0C": {
+     "enabled": true,
+     "name": "TicketBatch",
+     "supported": true
+    },
+    "96FD2F293A519AE1DB6F8BED23E4AD9119342DA7CB6BAFD00953D16C54205D8B": {
+     "enabled": true,
+     "name": "PriceOracle",
+     "supported": true
+    },
+    "98DECF327BF79997AEC178323AD51A830E457BFC6D454DAF3E46E5EC42DC619F": {
+     "enabled": true,
+     "name": "CheckCashMakesTrustLine",
+     "supported": true
+    },
+    "99DEA90A03A9EDE1472561AD21781435AF53D6FFFC6C38DB419C61FB777D54AC": {
+     "enabled": true,
+     "name": "fixHookMap",
+     "supported": true
+    },
+    "A17DCA7904EC2E62754570D64044CCFA890B66930752E7A8168FE77DBE42EE3A": {
+     "enabled": true,
+     "name": "fixImportIssuer",
+     "supported": true
+    },
+    "AE35ABDEFBDE520372B31C957020B34A7A4A9DC3115A69803A44016477C84D6E": {
+     "enabled": false,
+     "name": "fixNFTokenRemint",
+     "supported": true
+    },
+    "AF8DF7465C338AE64B1E937D6C8DA138C0D63AD5134A68792BBBE1F63356C422": {
+     "enabled": true,
+     "name": "FlowSortStrands",
+     "supported": true
+    },
+    "B2A4DB846F0891BF2C76AB2F2ACC8F5B4EC64437135C6E56F3F859DE5FFD5856": {
+     "enabled": true,
+     "name": "ExpandedSignerList",
+     "supported": true
+    },
+    "B4D44CC3111ADD964E846FC57760C8B50FFCD5A82C86A72756F6B058DDDF96AD": {
+     "enabled": false,
+     "name": "fix1201",
+     "supported": true
+    },
+    "B4E4F5D2D6FB84DF7399960A732309C9FD530EAE5941838160042833625A6076": {
+     "enabled": true,
+     "name": "NegativeUNL",
+     "supported": true
+    },
+    "B6B3EEDC0267AB50491FDC450A398AF30DBCD977CECED8BEF2499CAB5DAC19E2": {
+     "enabled": true,
+     "name": "fixRmSmallIncreasedQOffers",
+     "supported": true
+    },
+    "B9E739B8296B4A1BB29BE990B17D66E21B62A300A909F25AC55C22D6C72E1F9D": {
+     "enabled": false,
+     "name": "fix1523",
+     "supported": true
+    },
+    "BA993DF6058701246DAF748BDE237B0C980164D0034CEB1D831C089A90D9000D": {
+     "enabled": true,
+     "name": "fixFloatDivide",
+     "supported": true
+    },
+    "C393B3AEEBF575E475F0C60D5E4241B2070CC4D0EB6C4846B1A07508FAEFC485": {
+     "enabled": true,
+     "name": "fixInnerObjTemplate",
+     "supported": true
+    },
+    "C4483A1896170C66C098DEA5B0E024309C60DC960DE5F01CD7AF986AA3D9AD37": {
+     "enabled": true,
+     "name": "fixMasterKeyAsRegularKey",
+     "supported": true
+    },
+    "C7981B764EC4439123A86CC7CCBA436E9B3FF73B3F10A0AE51882E404522FC41": {
+     "enabled": false,
+     "name": "fixNFTokenPageLinks",
+     "supported": true
+    },
+    "C962119A75111083D118901B0D331959C620157FDEABA044398B992B829938C5": {
+     "enabled": true,
+     "name": "fixReduceImport",
+     "supported": true
+    },
+    "CA7C02118BA27599528543DFE77BA6838D1B0F43B447D4D7F53523CE6A0E9AC2": {
+     "enabled": true,
+     "name": "fix1543",
+     "supported": true
+    },
+    "CC5ABAE4F3EC92E94A59B1908C2BE82D2228B6485C00AFF8F22DF930D89C194E": {
+     "enabled": false,
+     "name": "SortedDirectories",
+     "supported": true
+    },
+    "CF08E97862F50AAD9EF92DE2BCD32A4A951800125F7D51D2188D3BF03D72DF0C": {
+     "enabled": true,
+     "name": "fixGuardDepth32",
+     "supported": true
+    },
+    "D686F2538F410C9D0D856788E98E3579595DAF7B38D38887F81ECAC934B06040": {
+     "enabled": true,
+     "name": "HooksUpdate1",
+     "supported": true
+    },
+    "DAF3A6EB04FA5DC51E8E4F23E9B7022B693EFA636F23F22664746C77B5786B23": {
+     "enabled": true,
+     "name": "DeepFreeze",
+     "supported": true
+    },
+    "DC9CA96AEA1DCF83E527D1AFC916EFAF5D27388ECA4060A88817C1238CAEE0BF": {
+     "enabled": false,
+     "name": "EnforceInvariants",
+     "supported": true
+    },
+    "DD6ABC68C1F37392E521EF6FF1475A11576D87C1BC36D9C9E4F0E6C09D18C120": {
+     "enabled": true,
+     "name": "Cron",
+     "supported": true
+    },
+    "DF8B4536989BDACE3F934F29423848B9F1D76D09BE6A1FCFE7E7F06AA26ABEAD": {
+     "enabled": false,
+     "name": "fixRemoveNFTokenAutoTrustLine",
+     "supported": true
+    },
+    "E2E6F2866106419B88C50045ACE96368558C345566AC8F2BDF5A5B5587F0E6FA": {
+     "enabled": false,
+     "name": "fix1368",
+     "supported": true
+    },
+    "E331BED1F9C4F5F6B6E307D40323D81C3AAAD093A61AB8CFAC7BCFBEBE31F758": {
+     "enabled": true,
+     "name": "fixCronStacking",
+     "supported": true
+    },
+    "ECE6819DBA5DB528F1A241695F5A9811EF99467CDE22510954FD357780BBD078": {
+     "enabled": true,
+     "name": "Hooks",
+     "supported": true
+    },
+    "ECF412BE0964EC2E71DCF807EEEA6EA8470D3DB15173D46F28AB6E234860AC32": {
+     "enabled": true,
+     "name": "URIToken",
+     "supported": true
+    },
+    "EDB4EE4C524E16BDD91D9A529332DED08DCAAA51CC6DC897ACFA1A0ED131C5B6": {
+     "enabled": true,
+     "name": "fix240819",
+     "supported": true
+    },
+    "F1ED6B4A411D8B872E65B9DCB4C8B100375B0DD3D62D07192E011D6D7F339013": {
+     "enabled": false,
+     "name": "fixTrustLinesToSelf",
+     "supported": true
+    },
+    "F5751842D26FC057B92CAA435ABF4F1428C2BCC4180D18775ADE92CB2643BBA3": {
+     "enabled": true,
+     "name": "Import",
+     "supported": true
+    },
+    "F64E1EABBE79D55B3BB82020516CEC2C582A98A6BFE20FBE9BB6A0D233418064": {
+     "enabled": true,
+     "name": "DepositAuth",
+     "supported": true
+    },
+    "F709B3C87FD60822407FCC0217BF965F4B490141427777C4605A84A73DF15D51": {
+     "enabled": true,
+     "name": "fixIOULockedBalanceInvariant",
+     "supported": true
+    },
+    "FA4E4881FDB038DCD8D7DFD850A304546E0B2844CACC3AB97CA41136A03E49F5": {
+     "enabled": true,
+     "name": "Remarks",
+     "supported": true
+    },
+    "FBD513F1B893AC765B78F250E6FFA6A11B573209D1842ADC787C850696741288": {
+     "enabled": true,
+     "name": "fix1578",
+     "supported": true
+    },
+    "FCB9267E0A189F60C4210A6CB3517FF6611C9173E4A30F9DAAB35F63D53942D5": {
+     "enabled": false,
+     "name": "HookAPISerializedType240",
+     "supported": true
+    }
+   },
+   "status": "success"
+  },
+  "amendmentsObject": {
+   "index": "7DB0788C020F02780A673DC74757F23823FA3014C1866E72CC4CD8B226CD6EF4",
+   "ledger_hash": "717D2B1F6378B927983717E4F1116CB33983CDE9723ED83184C9B7E3E39B7227",
+   "ledger_index": 26183057,
+   "node": {
+    "Amendments": [
+     "00C1FC4A53E60AB02C864641002B3172F38677E29C26C5406685179B37E1EDAC",
+     "157D2D480E006395B76F948E3E07A45A05FE10230D88A7993C71F97AE4B1F2D1",
+     "1F4AFA8FA1BC8827AD4C0F682C03A8B671DCDF6B5C4DE36D44243A684103EF88",
+     "25BA44241B3BD880770BFA4DA21C7180576831855368CBEC6A3154FDE4A7676E",
+     "2CD5286D8D687E98B41102BDD797198E81EA41DF7BD104E6561FEB104EFF2561",
+     "3012E8230864E95A58C60FD61430D7E1B4D3353195F2981DC12B0C7C0950FFAC",
+     "3CBC5C4E630A1B82380295CDA84B32B49DD066602E74E39B85EF64137FA65194",
+     "42F8B586B357ABBAAAA1C733C3E7D3B75761395340D0CDF600179E8737E22478",
+     "452F5906C46D46F407883344BFDD90E672B672C5E9943DB4891E3A34FEEEB9DB",
+     "47C3002ABA31628447E8E9A8B315FAA935CE30183F9A9B86845E469CA2CDC3DF",
+     "4F46DF03559967AC60F2EB272FEFE3928A7594A45FF774B87A7E540DB0F8F068",
+     "586480873651E106F1D6339B0C4A8945BA705A777F3F4524626FF1FC07EFE41D",
+     "58BE9B5968C4DA7C59BA900961828B113E5490699B21877DEF9A31E9D0FE5D5F",
+     "5D08145F0A4983F23AFFFF514E83FAD355C5ABFBB6CAB76FB5BC8519FF5F33BE",
+     "621A0B264970359869E3C0363A899909AAB7A887C8B73519E4ECF952D33258A8",
+     "67A34F2CF55BFC0F93AACD5B281413176FEE195269FA6D95219A2DF738671172",
+     "7117E2EC2DBF119CA55181D69819F1999ECEE1A0225A7FD2B9ED47940968479C",
+     "740352F2412A9909880C23A559FCECEDA3BE2126FED62FC7660D628A06927F11",
+     "75A7E01C505DD5A179DFE3E000A9B6F1EDDEB55A12F95579A23E15B15DC8BE5A",
+     "89308AF3B8B10B7192C4E613E1D2E4D9BA64B2EE2D5232402AE82A6A7220D953",
+     "8F81B066ED20DAECA20DF57187767685EEF3980B228E0667A650BAF24426D3B4",
+     "919857E4B902A20216E4819B9BD9FD1FD19A66ECF63151C18A4C48C873DB9578",
+     "93E516234E35E08CA689FA33A6D38E103881F8DCB53023F728C307AA89D515A7",
+     "955DF3FA5891195A9DAEFA1DDC6BB244B545DDE1BAA84CBB25D5F12A8DA68A0C",
+     "98DECF327BF79997AEC178323AD51A830E457BFC6D454DAF3E46E5EC42DC619F",
+     "AF8DF7465C338AE64B1E937D6C8DA138C0D63AD5134A68792BBBE1F63356C422",
+     "B2A4DB846F0891BF2C76AB2F2ACC8F5B4EC64437135C6E56F3F859DE5FFD5856",
+     "B4E4F5D2D6FB84DF7399960A732309C9FD530EAE5941838160042833625A6076",
+     "B6B3EEDC0267AB50491FDC450A398AF30DBCD977CECED8BEF2499CAB5DAC19E2",
+     "C4483A1896170C66C098DEA5B0E024309C60DC960DE5F01CD7AF986AA3D9AD37",
+     "CA7C02118BA27599528543DFE77BA6838D1B0F43B447D4D7F53523CE6A0E9AC2",
+     "D686F2538F410C9D0D856788E98E3579595DAF7B38D38887F81ECAC934B06040",
+     "ECE6819DBA5DB528F1A241695F5A9811EF99467CDE22510954FD357780BBD078",
+     "ECF412BE0964EC2E71DCF807EEEA6EA8470D3DB15173D46F28AB6E234860AC32",
+     "F5751842D26FC057B92CAA435ABF4F1428C2BCC4180D18775ADE92CB2643BBA3",
+     "F64E1EABBE79D55B3BB82020516CEC2C582A98A6BFE20FBE9BB6A0D233418064",
+     "FBD513F1B893AC765B78F250E6FFA6A11B573209D1842ADC787C850696741288",
+     "6E739F4F8B07BED29FC9FF440DA3C301CD14A180DF45819F658FEC2F7DE31427",
+     "4C499D17719BB365B69010A436B64FD1A82AAB199FC1CEB06962EBD01059FB09",
+     "215181D23BF5C173314B5FDB9C872C92DE6CC918483727DE037C0C13E7E6EE9D",
+     "0D8BF22FF7570D58598D1EF19EBB6E142AD46E59A223FD3816262FBB69345BEA",
+     "7CA0426E7F411D39BB014E57CD9E08F61DE1750F0D41FCD428D9FB80BB7596B0",
+     "4B8466415FAB32FFA89D9DCBE166A42340115771DF611A7160F8D7439C87ECD8",
+     "EDB4EE4C524E16BDD91D9A529332DED08DCAAA51CC6DC897ACFA1A0ED131C5B6",
+     "8063140E9260799D6716756B891CEC3E7006C4E4F277AB84670663A88F94B9C4",
+     "88693F108C3CD8A967F3F4253A32DEF5E35F9406ACD2A11B88B11D90865763A9",
+     "BA993DF6058701246DAF748BDE237B0C980164D0034CEB1D831C089A90D9000D",
+     "C962119A75111083D118901B0D331959C620157FDEABA044398B992B829938C5",
+     "717F060C0C237F122F8065781528B1CA047D82B4E787022984F26D7B997E3D9C",
+     "88FEC10C8272D690124E923FBB47A95013C6AA20D9B27B871A99790D05055421",
+     "5B8E5D8F3D8687D3CE567FB5BDAED152204D195ED2EAEC346E3AA0607D51752A",
+     "FA4E4881FDB038DCD8D7DFD850A304546E0B2844CACC3AB97CA41136A03E49F5",
+     "9000B5F96F9E129D1CB42F2B07AF4CEFEFBFDF49CFCD8B6FF46E719A3F19B436",
+     "94312150FFBA0E21B46244D7C4C6D66219C53C5F82FB7949F0832A6B56FB9631",
+     "22DD15A56DFD886A7B7D37B656DC4F974BB0FE4BECB83055B01AE8B5A8466D34",
+     "DAF3A6EB04FA5DC51E8E4F23E9B7022B693EFA636F23F22664746C77B5786B23",
+     "56B241D7A43D40354D02A9DC4C8DF5C7A1F930D92A9035C4E12291B3CA3E1C2B",
+     "0134BEED89A1A1D8B2663CF9DFCDB9024A060706FDFF147AA4D203749AFD5932",
+     "8EC4304A06AF03BE953EA6EDA494864F6F3F30AA002BABA35869FBB8C6AE5D52",
+     "7FE392C21A2880B3223A2CAF8DC59ADDAE5B03BD4B0500A1F63DF9893E852DBA",
+     "17C342EA7EFA25D809FC0DD7BC885190DAF54582E5A683ED0BBA200877A0BFDE",
+     "E331BED1F9C4F5F6B6E307D40323D81C3AAAD093A61AB8CFAC7BCFBEBE31F758",
+     "DD6ABC68C1F37392E521EF6FF1475A11576D87C1BC36D9C9E4F0E6C09D18C120",
+     "27CD95EE8E1E5A537FF2F89B6CEB7C622E78E9374EBD7DCBEDFAE21CD6F16E0A",
+     "C393B3AEEBF575E475F0C60D5E4241B2070CC4D0EB6C4846B1A07508FAEFC485",
+     "7BB62DC13EC72B775091E9C71BF8CF97E122647693B50C5E87A80DFD6FCFAC50",
+     "99DEA90A03A9EDE1472561AD21781435AF53D6FFFC6C38DB419C61FB777D54AC",
+     "3318EA0CF0755AF15DAC19F2B5C5BCBFF4B78BDD57609ACCAABE2C41309B051A",
+     "15D61F0C6DB6A2F86BCF96F1E2444FEC54E705923339EC175BD3E517C8B3FF91",
+     "31E0DA76FB8FB527CADCDF0E61CB9C94120966328EFA9DCA202135BAF319C0BA",
+     "A17DCA7904EC2E62754570D64044CCFA890B66930752E7A8168FE77DBE42EE3A",
+     "6BA7A8FF26BB2387EE3020CB871A616C8DC15231F4E4207509DB0FA8750199D7",
+     "96FD2F293A519AE1DB6F8BED23E4AD9119342DA7CB6BAFD00953D16C54205D8B",
+     "F709B3C87FD60822407FCC0217BF965F4B490141427777C4605A84A73DF15D51",
+     "CF08E97862F50AAD9EF92DE2BCD32A4A951800125F7D51D2188D3BF03D72DF0C"
+    ],
+    "Flags": 0,
+    "LedgerEntryType": "Amendments",
+    "PreviousTxnID": "38420700A68ABC02E0B8B742E7EB2778F259F6AE4C47751CEC3142700941E207",
+    "PreviousTxnLgrSeq": 25504001,
+    "index": "7DB0788C020F02780A673DC74757F23823FA3014C1866E72CC4CD8B226CD6EF4"
+   },
+   "validated": true,
+   "status": "success"
+  }
+ },
+ "testnet": {
+  "feature": {
+   "features": {
+    "00C1FC4A53E60AB02C864641002B3172F38677E29C26C5406685179B37E1EDAC": {
+     "enabled": true,
+     "name": "RequireFullyCanonicalSig",
+     "supported": true
+    },
+    "0134BEED89A1A1D8B2663CF9DFCDB9024A060706FDFF147AA4D203749AFD5932": {
+     "enabled": true,
+     "name": "IOUIssuerWeakTSH",
+     "supported": true
+    },
+    "0285B7E5E08E1A8E4C15636F0591D87F73CB6A7B6452A932AD72BBC8E5D1CBE3": {
+     "enabled": false,
+     "name": "fixNFTokenDirV1",
+     "supported": true
+    },
+    "03BDC0099C4E14163ADA272C1B6F6FABB448CC3E51F522F978041E4B57D9158C": {
+     "enabled": false,
+     "name": "fixNFTokenReserve",
+     "supported": true
+    },
+    "07D43DCE529B15A10827E5E04943B496762F9A88E3268269D69C44BE49E21104": {
+     "enabled": false,
+     "name": "Escrow",
+     "supported": true
+    },
+    "08DE7D96082187F6E6578530258C77FAABABE4C20474BDB82F04B021F1A68647": {
+     "enabled": false,
+     "name": "PayChan",
+     "supported": true
+    },
+    "0D8BF22FF7570D58598D1EF19EBB6E142AD46E59A223FD3816262FBB69345BEA": {
+     "enabled": true,
+     "name": "Remit",
+     "supported": true
+    },
+    "1562511F573A19AE9BD103B5D6B9E01B3B46805AEC5D3C4805C902B514399146": {
+     "enabled": false,
+     "name": "CryptoConditions",
+     "supported": true
+    },
+    "157D2D480E006395B76F948E3E07A45A05FE10230D88A7993C71F97AE4B1F2D1": {
+     "enabled": true,
+     "name": "Checks",
+     "supported": true
+    },
+    "15D61F0C6DB6A2F86BCF96F1E2444FEC54E705923339EC175BD3E517C8B3FF91": {
+     "enabled": true,
+     "name": "fixDisallowIncomingV1",
+     "supported": true
+    },
+    "17C342EA7EFA25D809FC0DD7BC885190DAF54582E5A683ED0BBA200877A0BFDE": {
+     "enabled": true,
+     "name": "fixHookAPI20251128",
+     "supported": true
+    },
+    "1D3463A5891F9E589C5AE839FFAC4A917CE96197098A1EF22304E1BC5B98A454": {
+     "enabled": false,
+     "name": "fix1528",
+     "supported": true
+    },
+    "1F4AFA8FA1BC8827AD4C0F682C03A8B671DCDF6B5C4DE36D44243A684103EF88": {
+     "enabled": true,
+     "name": "HardenedValidations",
+     "supported": true
+    },
+    "215181D23BF5C173314B5FDB9C872C92DE6CC918483727DE037C0C13E7E6EE9D": {
+     "enabled": true,
+     "name": "fixXahauV2",
+     "supported": true
+    },
+    "22DD15A56DFD886A7B7D37B656DC4F974BB0FE4BECB83055B01AE8B5A8466D34": {
+     "enabled": true,
+     "name": "fixProvisionalDoubleThreading",
+     "supported": true
+    },
+    "25BA44241B3BD880770BFA4DA21C7180576831855368CBEC6A3154FDE4A7676E": {
+     "enabled": true,
+     "name": "fix1781",
+     "supported": true
+    },
+    "27CD95EE8E1E5A537FF2F89B6CEB7C622E78E9374EBD7DCBEDFAE21CD6F16E0A": {
+     "enabled": true,
+     "name": "fixReducedOffersV1",
+     "supported": true
+    },
+    "2CD5286D8D687E98B41102BDD797198E81EA41DF7BD104E6561FEB104EFF2561": {
+     "enabled": true,
+     "name": "fixTakerDryOfferRemoval",
+     "supported": true
+    },
+    "2DC64F1D6FFA1C8ACC79D04AD099154AA6C2665A7AD002C00ED36A8C90ABF1E7": {
+     "enabled": true,
+     "name": "HookOnV2",
+     "supported": true
+    },
+    "2E2FB9CF8A44EB80F4694D38AADAE9B8B7ADAFD2F092E10068E61C98C4F092B0": {
+     "enabled": false,
+     "name": "fixUniversalNumber",
+     "supported": true
+    },
+    "3012E8230864E95A58C60FD61430D7E1B4D3353195F2981DC12B0C7C0950FFAC": {
+     "enabled": true,
+     "name": "FlowCross",
+     "supported": true
+    },
+    "30CD365592B8EE40489BA01AE2F7555CAC9C983145871DC82A42A31CF5BAE7D9": {
+     "enabled": false,
+     "name": "DeletableAccounts",
+     "supported": true
+    },
+    "31E0DA76FB8FB527CADCDF0E61CB9C94120966328EFA9DCA202135BAF319C0BA": {
+     "enabled": true,
+     "name": "fixReducedOffersV2",
+     "supported": true
+    },
+    "32A122F1352A4C7B3A6D790362CC34749C5E57FCE896377BFDC6CCD14F6CD627": {
+     "enabled": false,
+     "name": "NonFungibleTokensV1_1",
+     "supported": true
+    },
+    "3318EA0CF0755AF15DAC19F2B5C5BCBFF4B78BDD57609ACCAABE2C41309B051A": {
+     "enabled": true,
+     "name": "fixFillOrKill",
+     "supported": true
+    },
+    "36799EA497B1369B170805C078AEFE6188345F9B3E324C21E9CA3FF574E3C3D6": {
+     "enabled": false,
+     "name": "fixNFTokenNegOffer",
+     "supported": true
+    },
+    "3C43D9A973AA4443EF3FC38E42DD306160FBFFDAB901CD8BAA15D09F2597EB87": {
+     "enabled": false,
+     "name": "NonFungibleTokensV1",
+     "supported": true
+    },
+    "3CBC5C4E630A1B82380295CDA84B32B49DD066602E74E39B85EF64137FA65194": {
+     "enabled": true,
+     "name": "DepositPreauth",
+     "supported": true
+    },
+    "42426C4D4F1009EE67080A9B7965B44656D7714D104A72F9B4369F97ABF044EE": {
+     "enabled": false,
+     "name": "FeeEscalation",
+     "supported": true
+    },
+    "42EEA5E28A97824821D4EF97081FE36A54E9593C6E4F20CBAE098C69D2E072DC": {
+     "enabled": false,
+     "name": "fix1373",
+     "supported": true
+    },
+    "42F8B586B357ABBAAAA1C733C3E7D3B75761395340D0CDF600179E8737E22478": {
+     "enabled": true,
+     "name": "BalanceRewards",
+     "supported": true
+    },
+    "452F5906C46D46F407883344BFDD90E672B672C5E9943DB4891E3A34FEEEB9DB": {
+     "enabled": true,
+     "name": "fixSTAmountCanonicalize",
+     "supported": true
+    },
+    "47C3002ABA31628447E8E9A8B315FAA935CE30183F9A9B86845E469CA2CDC3DF": {
+     "enabled": true,
+     "name": "DisallowIncoming",
+     "supported": true
+    },
+    "4B8466415FAB32FFA89D9DCBE166A42340115771DF611A7160F8D7439C87ECD8": {
+     "enabled": true,
+     "name": "fixNSDelete",
+     "supported": true
+    },
+    "4C499D17719BB365B69010A436B64FD1A82AAB199FC1CEB06962EBD01059FB09": {
+     "enabled": true,
+     "name": "fixXahauV1",
+     "supported": true
+    },
+    "4C97EBA926031A7CF7D7B36FDE3ED66DDA5421192D63DE53FFB46E43B9DC8373": {
+     "enabled": false,
+     "name": "MultiSign",
+     "supported": true
+    },
+    "4D1C99993DD4167B272809227B7B024363F8EF5DB8F1A748618F47B6F38C31E7": {
+     "enabled": true,
+     "name": "HooksUpdate2",
+     "supported": true
+    },
+    "4F46DF03559967AC60F2EB272FEFE3928A7594A45FF774B87A7E540DB0F8F068": {
+     "enabled": true,
+     "name": "fixAmendmentMajorityCalc",
+     "supported": true
+    },
+    "532651B4FD58DF8922A49BA101AB3E996E5BFBF95A913B3E392504863E63B164": {
+     "enabled": false,
+     "name": "TickSize",
+     "supported": true
+    },
+    "56B241D7A43D40354D02A9DC4C8DF5C7A1F930D92A9035C4E12291B3CA3E1C2B": {
+     "enabled": true,
+     "name": "Clawback",
+     "supported": true
+    },
+    "586480873651E106F1D6339B0C4A8945BA705A777F3F4524626FF1FC07EFE41D": {
+     "enabled": true,
+     "name": "MultiSignReserve",
+     "supported": true
+    },
+    "58BE9B5968C4DA7C59BA900961828B113E5490699B21877DEF9A31E9D0FE5D5F": {
+     "enabled": true,
+     "name": "fix1623",
+     "supported": true
+    },
+    "5A7EDF552D4015D082B1D4B179E6994C81BD20338EF263AA75E9B29CB702A48F": {
+     "enabled": true,
+     "name": "NamedHooks",
+     "supported": true
+    },
+    "5B8E5D8F3D8687D3CE567FB5BDAED152204D195ED2EAEC346E3AA0607D51752A": {
+     "enabled": true,
+     "name": "fixRewardClaimFlags",
+     "supported": true
+    },
+    "5D08145F0A4983F23AFFFF514E83FAD355C5ABFBB6CAB76FB5BC8519FF5F33BE": {
+     "enabled": true,
+     "name": "fix1515",
+     "supported": true
+    },
+    "621A0B264970359869E3C0363A899909AAB7A887C8B73519E4ECF952D33258A8": {
+     "enabled": true,
+     "name": "fixPayChanRecipientOwnerDir",
+     "supported": true
+    },
+    "6781F8368C4771B83E8B821D88F580202BCB4228075297B19E4FDC5233F1EFDC": {
+     "enabled": false,
+     "name": "TrustSetAuth",
+     "supported": true
+    },
+    "67A34F2CF55BFC0F93AACD5B281413176FEE195269FA6D95219A2DF738671172": {
+     "enabled": true,
+     "name": "fix1513",
+     "supported": true
+    },
+    "6BA7A8FF26BB2387EE3020CB871A616C8DC15231F4E4207509DB0FA8750199D7": {
+     "enabled": true,
+     "name": "IOURewardClaim",
+     "supported": true
+    },
+    "6C92211186613F9647A89DFFBAB8F94C99D4C7E956D495270789128569177DA1": {
+     "enabled": false,
+     "name": "fix1512",
+     "supported": true
+    },
+    "6E739F4F8B07BED29FC9FF440DA3C301CD14A180DF45819F658FEC2F7DE31427": {
+     "enabled": true,
+     "name": "XahauGenesis",
+     "supported": true
+    },
+    "7117E2EC2DBF119CA55181D69819F1999ECEE1A0225A7FD2B9ED47940968479C": {
+     "enabled": true,
+     "name": "fix1571",
+     "supported": true
+    },
+    "717F060C0C237F122F8065781528B1CA047D82B4E787022984F26D7B997E3D9C": {
+     "enabled": true,
+     "name": "fix20250131",
+     "supported": true
+    },
+    "726F944886BCDF7433203787E93DD9AA87FAB74DFE3AF4785BA03BEFC97ADA1F": {
+     "enabled": true,
+     "name": "AMMClawback",
+     "supported": true
+    },
+    "73761231F7F3D94EC3D8C63D91BDD0D89045C6F71B917D1925C01253515A6669": {
+     "enabled": false,
+     "name": "fixNonFungibleTokensV1_2",
+     "supported": true
+    },
+    "740352F2412A9909880C23A559FCECEDA3BE2126FED62FC7660D628A06927F11": {
+     "enabled": true,
+     "name": "Flow",
+     "supported": true
+    },
+    "75A7E01C505DD5A179DFE3E000A9B6F1EDDEB55A12F95579A23E15B15DC8BE5A": {
+     "enabled": true,
+     "name": "ImmediateOfferKilled",
+     "supported": true
+    },
+    "763C37B352BE8C7A04E810F8E462644C45AFEAD624BF3894A08E5C917CF9FF39": {
+     "enabled": false,
+     "name": "fixEnforceNFTokenTrustline",
+     "supported": true
+    },
+    "7BB62DC13EC72B775091E9C71BF8CF97E122647693B50C5E87A80DFD6FCFAC50": {
+     "enabled": true,
+     "name": "fixPreviousTxnID",
+     "supported": true
+    },
+    "7CA0426E7F411D39BB014E57CD9E08F61DE1750F0D41FCD428D9FB80BB7596B0": {
+     "enabled": true,
+     "name": "ZeroB2M",
+     "supported": true
+    },
+    "7FE392C21A2880B3223A2CAF8DC59ADDAE5B03BD4B0500A1F63DF9893E852DBA": {
+     "enabled": true,
+     "name": "ExtendedHookState",
+     "supported": true
+    },
+    "8063140E9260799D6716756B891CEC3E7006C4E4F277AB84670663A88F94B9C4": {
+     "enabled": true,
+     "name": "fixPageCap",
+     "supported": true
+    },
+    "86E83A7D2ECE3AD5FA87AB2195AE015C950469ABF0B72EAACED318F74886AE90": {
+     "enabled": false,
+     "name": "CryptoConditionsSuite",
+     "supported": true
+    },
+    "88693F108C3CD8A967F3F4253A32DEF5E35F9406ACD2A11B88B11D90865763A9": {
+     "enabled": true,
+     "name": "fix240911",
+     "supported": true
+    },
+    "88FEC10C8272D690124E923FBB47A95013C6AA20D9B27B871A99790D05055421": {
+     "enabled": true,
+     "name": "fixXahauV3",
+     "supported": true
+    },
+    "89308AF3B8B10B7192C4E613E1D2E4D9BA64B2EE2D5232402AE82A6A7220D953": {
+     "enabled": true,
+     "name": "fixQualityUpperBound",
+     "supported": true
+    },
+    "8EC4304A06AF03BE953EA6EDA494864F6F3F30AA002BABA35869FBB8C6AE5D52": {
+     "enabled": true,
+     "name": "fixInvalidTxFlags",
+     "supported": true
+    },
+    "8F81B066ED20DAECA20DF57187767685EEF3980B228E0667A650BAF24426D3B4": {
+     "enabled": true,
+     "name": "fixCheckThreading",
+     "supported": true
+    },
+    "9000B5F96F9E129D1CB42F2B07AF4CEFEFBFDF49CFCD8B6FF46E719A3F19B436": {
+     "enabled": true,
+     "name": "HookCanEmit",
+     "supported": true
+    },
+    "919857E4B902A20216E4819B9BD9FD1FD19A66ECF63151C18A4C48C873DB9578": {
+     "enabled": true,
+     "name": "PaychanAndEscrowForTokens",
+     "supported": true
+    },
+    "93E516234E35E08CA689FA33A6D38E103881F8DCB53023F728C307AA89D515A7": {
+     "enabled": true,
+     "name": "XRPFees",
+     "supported": true
+    },
+    "94312150FFBA0E21B46244D7C4C6D66219C53C5F82FB7949F0832A6B56FB9631": {
+     "enabled": true,
+     "name": "Touch",
+     "supported": true
+    },
+    "955DF3FA5891195A9DAEFA1DDC6BB244B545DDE1BAA84CBB25D5F12A8DA68A0C": {
+     "enabled": true,
+     "name": "TicketBatch",
+     "supported": true
+    },
+    "96FD2F293A519AE1DB6F8BED23E4AD9119342DA7CB6BAFD00953D16C54205D8B": {
+     "enabled": true,
+     "name": "PriceOracle",
+     "supported": true
+    },
+    "98DECF327BF79997AEC178323AD51A830E457BFC6D454DAF3E46E5EC42DC619F": {
+     "enabled": true,
+     "name": "CheckCashMakesTrustLine",
+     "supported": true
+    },
+    "99DEA90A03A9EDE1472561AD21781435AF53D6FFFC6C38DB419C61FB777D54AC": {
+     "enabled": true,
+     "name": "fixHookMap",
+     "supported": true
+    },
+    "A17DCA7904EC2E62754570D64044CCFA890B66930752E7A8168FE77DBE42EE3A": {
+     "enabled": true,
+     "name": "fixImportIssuer",
+     "supported": true
+    },
+    "AE35ABDEFBDE520372B31C957020B34A7A4A9DC3115A69803A44016477C84D6E": {
+     "enabled": false,
+     "name": "fixNFTokenRemint",
+     "supported": true
+    },
+    "AF8DF7465C338AE64B1E937D6C8DA138C0D63AD5134A68792BBBE1F63356C422": {
+     "enabled": true,
+     "name": "FlowSortStrands",
+     "supported": true
+    },
+    "B2A4DB846F0891BF2C76AB2F2ACC8F5B4EC64437135C6E56F3F859DE5FFD5856": {
+     "enabled": true,
+     "name": "ExpandedSignerList",
+     "supported": true
+    },
+    "B4D44CC3111ADD964E846FC57760C8B50FFCD5A82C86A72756F6B058DDDF96AD": {
+     "enabled": false,
+     "name": "fix1201",
+     "supported": true
+    },
+    "B4E4F5D2D6FB84DF7399960A732309C9FD530EAE5941838160042833625A6076": {
+     "enabled": true,
+     "name": "NegativeUNL",
+     "supported": true
+    },
+    "B6B3EEDC0267AB50491FDC450A398AF30DBCD977CECED8BEF2499CAB5DAC19E2": {
+     "enabled": true,
+     "name": "fixRmSmallIncreasedQOffers",
+     "supported": true
+    },
+    "B9E739B8296B4A1BB29BE990B17D66E21B62A300A909F25AC55C22D6C72E1F9D": {
+     "enabled": false,
+     "name": "fix1523",
+     "supported": true
+    },
+    "BA993DF6058701246DAF748BDE237B0C980164D0034CEB1D831C089A90D9000D": {
+     "enabled": true,
+     "name": "fixFloatDivide",
+     "supported": true
+    },
+    "C393B3AEEBF575E475F0C60D5E4241B2070CC4D0EB6C4846B1A07508FAEFC485": {
+     "enabled": true,
+     "name": "fixInnerObjTemplate",
+     "supported": true
+    },
+    "C4483A1896170C66C098DEA5B0E024309C60DC960DE5F01CD7AF986AA3D9AD37": {
+     "enabled": true,
+     "name": "fixMasterKeyAsRegularKey",
+     "supported": true
+    },
+    "C7981B764EC4439123A86CC7CCBA436E9B3FF73B3F10A0AE51882E404522FC41": {
+     "enabled": false,
+     "name": "fixNFTokenPageLinks",
+     "supported": true
+    },
+    "C962119A75111083D118901B0D331959C620157FDEABA044398B992B829938C5": {
+     "enabled": true,
+     "name": "fixReduceImport",
+     "supported": true
+    },
+    "CA7C02118BA27599528543DFE77BA6838D1B0F43B447D4D7F53523CE6A0E9AC2": {
+     "enabled": true,
+     "name": "fix1543",
+     "supported": true
+    },
+    "CC5ABAE4F3EC92E94A59B1908C2BE82D2228B6485C00AFF8F22DF930D89C194E": {
+     "enabled": false,
+     "name": "SortedDirectories",
+     "supported": true
+    },
+    "CF08E97862F50AAD9EF92DE2BCD32A4A951800125F7D51D2188D3BF03D72DF0C": {
+     "enabled": true,
+     "name": "fixGuardDepth32",
+     "supported": true
+    },
+    "D686F2538F410C9D0D856788E98E3579595DAF7B38D38887F81ECAC934B06040": {
+     "enabled": true,
+     "name": "HooksUpdate1",
+     "supported": true
+    },
+    "DAF3A6EB04FA5DC51E8E4F23E9B7022B693EFA636F23F22664746C77B5786B23": {
+     "enabled": true,
+     "name": "DeepFreeze",
+     "supported": true
+    },
+    "DC9CA96AEA1DCF83E527D1AFC916EFAF5D27388ECA4060A88817C1238CAEE0BF": {
+     "enabled": false,
+     "name": "EnforceInvariants",
+     "supported": true
+    },
+    "DD6ABC68C1F37392E521EF6FF1475A11576D87C1BC36D9C9E4F0E6C09D18C120": {
+     "enabled": true,
+     "name": "Cron",
+     "supported": true
+    },
+    "DF8B4536989BDACE3F934F29423848B9F1D76D09BE6A1FCFE7E7F06AA26ABEAD": {
+     "enabled": false,
+     "name": "fixRemoveNFTokenAutoTrustLine",
+     "supported": true
+    },
+    "E2E6F2866106419B88C50045ACE96368558C345566AC8F2BDF5A5B5587F0E6FA": {
+     "enabled": false,
+     "name": "fix1368",
+     "supported": true
+    },
+    "E331BED1F9C4F5F6B6E307D40323D81C3AAAD093A61AB8CFAC7BCFBEBE31F758": {
+     "enabled": true,
+     "name": "fixCronStacking",
+     "supported": true
+    },
+    "ECE6819DBA5DB528F1A241695F5A9811EF99467CDE22510954FD357780BBD078": {
+     "enabled": true,
+     "name": "Hooks",
+     "supported": true
+    },
+    "ECF412BE0964EC2E71DCF807EEEA6EA8470D3DB15173D46F28AB6E234860AC32": {
+     "enabled": true,
+     "name": "URIToken",
+     "supported": true
+    },
+    "EDB4EE4C524E16BDD91D9A529332DED08DCAAA51CC6DC897ACFA1A0ED131C5B6": {
+     "enabled": true,
+     "name": "fix240819",
+     "supported": true
+    },
+    "F1ED6B4A411D8B872E65B9DCB4C8B100375B0DD3D62D07192E011D6D7F339013": {
+     "enabled": false,
+     "name": "fixTrustLinesToSelf",
+     "supported": true
+    },
+    "F5751842D26FC057B92CAA435ABF4F1428C2BCC4180D18775ADE92CB2643BBA3": {
+     "enabled": true,
+     "name": "Import",
+     "supported": true
+    },
+    "F64E1EABBE79D55B3BB82020516CEC2C582A98A6BFE20FBE9BB6A0D233418064": {
+     "enabled": true,
+     "name": "DepositAuth",
+     "supported": true
+    },
+    "F709B3C87FD60822407FCC0217BF965F4B490141427777C4605A84A73DF15D51": {
+     "enabled": true,
+     "name": "fixIOULockedBalanceInvariant",
+     "supported": true
+    },
+    "FA4E4881FDB038DCD8D7DFD850A304546E0B2844CACC3AB97CA41136A03E49F5": {
+     "enabled": true,
+     "name": "Remarks",
+     "supported": true
+    },
+    "FBD513F1B893AC765B78F250E6FFA6A11B573209D1842ADC787C850696741288": {
+     "enabled": true,
+     "name": "fix1578",
+     "supported": true
+    },
+    "FCB9267E0A189F60C4210A6CB3517FF6611C9173E4A30F9DAAB35F63D53942D5": {
+     "enabled": true,
+     "name": "HookAPISerializedType240",
+     "supported": true
+    }
+   },
+   "status": "success"
+  },
+  "amendmentsObject": {
+   "index": "7DB0788C020F02780A673DC74757F23823FA3014C1866E72CC4CD8B226CD6EF4",
+   "ledger_hash": "13FA1FBA76EC209622F24B1C746FC194AE0B5EE77F5334C9D8B6BF2DDDF7AAE3",
+   "ledger_index": 12768604,
+   "node": {
+    "Amendments": [
+     "67A34F2CF55BFC0F93AACD5B281413176FEE195269FA6D95219A2DF738671172",
+     "42F8B586B357ABBAAAA1C733C3E7D3B75761395340D0CDF600179E8737E22478",
+     "2CD5286D8D687E98B41102BDD797198E81EA41DF7BD104E6561FEB104EFF2561",
+     "89308AF3B8B10B7192C4E613E1D2E4D9BA64B2EE2D5232402AE82A6A7220D953",
+     "8063140E9260799D6716756B891CEC3E7006C4E4F277AB84670663A88F94B9C4",
+     "F5751842D26FC057B92CAA435ABF4F1428C2BCC4180D18775ADE92CB2643BBA3",
+     "25BA44241B3BD880770BFA4DA21C7180576831855368CBEC6A3154FDE4A7676E",
+     "157D2D480E006395B76F948E3E07A45A05FE10230D88A7993C71F97AE4B1F2D1",
+     "586480873651E106F1D6339B0C4A8945BA705A777F3F4524626FF1FC07EFE41D",
+     "4B8466415FAB32FFA89D9DCBE166A42340115771DF611A7160F8D7439C87ECD8",
+     "621A0B264970359869E3C0363A899909AAB7A887C8B73519E4ECF952D33258A8",
+     "47C3002ABA31628447E8E9A8B315FAA935CE30183F9A9B86845E469CA2CDC3DF",
+     "4F46DF03559967AC60F2EB272FEFE3928A7594A45FF774B87A7E540DB0F8F068",
+     "ECE6819DBA5DB528F1A241695F5A9811EF99467CDE22510954FD357780BBD078",
+     "740352F2412A9909880C23A559FCECEDA3BE2126FED62FC7660D628A06927F11",
+     "58BE9B5968C4DA7C59BA900961828B113E5490699B21877DEF9A31E9D0FE5D5F",
+     "955DF3FA5891195A9DAEFA1DDC6BB244B545DDE1BAA84CBB25D5F12A8DA68A0C",
+     "D686F2538F410C9D0D856788E98E3579595DAF7B38D38887F81ECAC934B06040",
+     "B4E4F5D2D6FB84DF7399960A732309C9FD530EAE5941838160042833625A6076",
+     "93E516234E35E08CA689FA33A6D38E103881F8DCB53023F728C307AA89D515A7",
+     "B6B3EEDC0267AB50491FDC450A398AF30DBCD977CECED8BEF2499CAB5DAC19E2",
+     "6E739F4F8B07BED29FC9FF440DA3C301CD14A180DF45819F658FEC2F7DE31427",
+     "00C1FC4A53E60AB02C864641002B3172F38677E29C26C5406685179B37E1EDAC",
+     "9000B5F96F9E129D1CB42F2B07AF4CEFEFBFDF49CFCD8B6FF46E719A3F19B436",
+     "FBD513F1B893AC765B78F250E6FFA6A11B573209D1842ADC787C850696741288",
+     "3012E8230864E95A58C60FD61430D7E1B4D3353195F2981DC12B0C7C0950FFAC",
+     "CA7C02118BA27599528543DFE77BA6838D1B0F43B447D4D7F53523CE6A0E9AC2",
+     "C4483A1896170C66C098DEA5B0E024309C60DC960DE5F01CD7AF986AA3D9AD37",
+     "AF8DF7465C338AE64B1E937D6C8DA138C0D63AD5134A68792BBBE1F63356C422",
+     "88693F108C3CD8A967F3F4253A32DEF5E35F9406ACD2A11B88B11D90865763A9",
+     "B2A4DB846F0891BF2C76AB2F2ACC8F5B4EC64437135C6E56F3F859DE5FFD5856",
+     "FA4E4881FDB038DCD8D7DFD850A304546E0B2844CACC3AB97CA41136A03E49F5",
+     "452F5906C46D46F407883344BFDD90E672B672C5E9943DB4891E3A34FEEEB9DB",
+     "717F060C0C237F122F8065781528B1CA047D82B4E787022984F26D7B997E3D9C",
+     "EDB4EE4C524E16BDD91D9A529332DED08DCAAA51CC6DC897ACFA1A0ED131C5B6",
+     "98DECF327BF79997AEC178323AD51A830E457BFC6D454DAF3E46E5EC42DC619F",
+     "88FEC10C8272D690124E923FBB47A95013C6AA20D9B27B871A99790D05055421",
+     "7117E2EC2DBF119CA55181D69819F1999ECEE1A0225A7FD2B9ED47940968479C",
+     "94312150FFBA0E21B46244D7C4C6D66219C53C5F82FB7949F0832A6B56FB9631",
+     "919857E4B902A20216E4819B9BD9FD1FD19A66ECF63151C18A4C48C873DB9578",
+     "ECF412BE0964EC2E71DCF807EEEA6EA8470D3DB15173D46F28AB6E234860AC32",
+     "F64E1EABBE79D55B3BB82020516CEC2C582A98A6BFE20FBE9BB6A0D233418064",
+     "3CBC5C4E630A1B82380295CDA84B32B49DD066602E74E39B85EF64137FA65194",
+     "8F81B066ED20DAECA20DF57187767685EEF3980B228E0667A650BAF24426D3B4",
+     "BA993DF6058701246DAF748BDE237B0C980164D0034CEB1D831C089A90D9000D",
+     "5B8E5D8F3D8687D3CE567FB5BDAED152204D195ED2EAEC346E3AA0607D51752A",
+     "1F4AFA8FA1BC8827AD4C0F682C03A8B671DCDF6B5C4DE36D44243A684103EF88",
+     "5D08145F0A4983F23AFFFF514E83FAD355C5ABFBB6CAB76FB5BC8519FF5F33BE",
+     "C962119A75111083D118901B0D331959C620157FDEABA044398B992B829938C5",
+     "75A7E01C505DD5A179DFE3E000A9B6F1EDDEB55A12F95579A23E15B15DC8BE5A",
+     "56B241D7A43D40354D02A9DC4C8DF5C7A1F930D92A9035C4E12291B3CA3E1C2B",
+     "22DD15A56DFD886A7B7D37B656DC4F974BB0FE4BECB83055B01AE8B5A8466D34",
+     "DAF3A6EB04FA5DC51E8E4F23E9B7022B693EFA636F23F22664746C77B5786B23",
+     "7FE392C21A2880B3223A2CAF8DC59ADDAE5B03BD4B0500A1F63DF9893E852DBA",
+     "DD6ABC68C1F37392E521EF6FF1475A11576D87C1BC36D9C9E4F0E6C09D18C120",
+     "8EC4304A06AF03BE953EA6EDA494864F6F3F30AA002BABA35869FBB8C6AE5D52",
+     "15D61F0C6DB6A2F86BCF96F1E2444FEC54E705923339EC175BD3E517C8B3FF91",
+     "E331BED1F9C4F5F6B6E307D40323D81C3AAAD093A61AB8CFAC7BCFBEBE31F758",
+     "A17DCA7904EC2E62754570D64044CCFA890B66930752E7A8168FE77DBE42EE3A",
+     "7BB62DC13EC72B775091E9C71BF8CF97E122647693B50C5E87A80DFD6FCFAC50",
+     "99DEA90A03A9EDE1472561AD21781435AF53D6FFFC6C38DB419C61FB777D54AC",
+     "31E0DA76FB8FB527CADCDF0E61CB9C94120966328EFA9DCA202135BAF319C0BA",
+     "17C342EA7EFA25D809FC0DD7BC885190DAF54582E5A683ED0BBA200877A0BFDE",
+     "3318EA0CF0755AF15DAC19F2B5C5BCBFF4B78BDD57609ACCAABE2C41309B051A",
+     "C393B3AEEBF575E475F0C60D5E4241B2070CC4D0EB6C4846B1A07508FAEFC485",
+     "27CD95EE8E1E5A537FF2F89B6CEB7C622E78E9374EBD7DCBEDFAE21CD6F16E0A",
+     "215181D23BF5C173314B5FDB9C872C92DE6CC918483727DE037C0C13E7E6EE9D",
+     "6BA7A8FF26BB2387EE3020CB871A616C8DC15231F4E4207509DB0FA8750199D7",
+     "CF08E97862F50AAD9EF92DE2BCD32A4A951800125F7D51D2188D3BF03D72DF0C",
+     "5A7EDF552D4015D082B1D4B179E6994C81BD20338EF263AA75E9B29CB702A48F",
+     "FCB9267E0A189F60C4210A6CB3517FF6611C9173E4A30F9DAAB35F63D53942D5",
+     "0D8BF22FF7570D58598D1EF19EBB6E142AD46E59A223FD3816262FBB69345BEA",
+     "96FD2F293A519AE1DB6F8BED23E4AD9119342DA7CB6BAFD00953D16C54205D8B",
+     "2DC64F1D6FFA1C8ACC79D04AD099154AA6C2665A7AD002C00ED36A8C90ABF1E7",
+     "7CA0426E7F411D39BB014E57CD9E08F61DE1750F0D41FCD428D9FB80BB7596B0",
+     "4C499D17719BB365B69010A436B64FD1A82AAB199FC1CEB06962EBD01059FB09",
+     "4D1C99993DD4167B272809227B7B024363F8EF5DB8F1A748618F47B6F38C31E7",
+     "0134BEED89A1A1D8B2663CF9DFCDB9024A060706FDFF147AA4D203749AFD5932",
+     "F709B3C87FD60822407FCC0217BF965F4B490141427777C4605A84A73DF15D51",
+     "726F944886BCDF7433203787E93DD9AA87FAB74DFE3AF4785BA03BEFC97ADA1F"
+    ],
+    "Flags": 0,
+    "LedgerEntryType": "Amendments",
+    "PreviousTxnID": "F9F6A7F84C7BB807A2BA91F96C40F0BD44FB7A3E2FB3CA00ED7CA96509E3DC5D",
+    "PreviousTxnLgrSeq": 10037505,
+    "index": "7DB0788C020F02780A673DC74757F23823FA3014C1866E72CC4CD8B226CD6EF4"
+   },
+   "status": "success",
+   "validated": true
+  }
+ }
+}
