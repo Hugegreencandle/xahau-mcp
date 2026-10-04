@@ -993,7 +993,7 @@ server.registerTool("diff_node_amendments", {
 /* ===================== Tier E — unsigned tx builders (no keys) ===================== */
 
 server.registerTool("build_sethook_unsigned", {
-  description: "Assemble an UNSIGNED SetHook transaction from CreateCode + params, auto-running analyze_hook as preflight and flagging CRITICAL findings. Returns unsigned JSON + offline signing instructions. Never signs; testnet by default.",
+  description: "Assemble an UNSIGNED SetHook transaction from CreateCode + params, auto-running analyze_hook as preflight. On any CRITICAL finding the unsigned tx is WITHHELD (unsignedTx null) and only the findings come back, unless overrideCritical is true. Returns findings + unsigned JSON + offline signing instructions. Never signs; testnet by default.",
   inputSchema: {
     account: z.string().min(25), createCodeHex: z.string().optional(), wasmHex: z.string().optional(),
     hookOn: z.string().optional(), txTypes: z.array(z.string()).optional(),
@@ -1001,9 +1001,15 @@ server.registerTool("build_sethook_unsigned", {
     parameters: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
     grants: z.array(z.object({ authorize: z.string().optional(), hookHash: z.string().optional() })).optional(),
     flags: z.number().optional(), network: NET.default("testnet"),
+    overrideCritical: z.boolean().optional().describe("Build the tx even when preflight finds CRITICAL issues. Default false: the tx is withheld."),
   },
 }, async (a) => {
-  try { const r = buildSetHookUnsigned(a as any); return ok(`${r.blocked ? "⚠ CRITICAL preflight — " : ""}unsigned SetHook for ${a.account} (${r.network})`, r as any); }
+  try {
+    const r = buildSetHookUnsigned(a as any);
+    const head = r.withheld ? `⚠ CRITICAL preflight — unsigned SetHook WITHHELD for ${a.account} (${r.network}); review preflightFindings`
+      : `${r.blocked ? "⚠ CRITICAL preflight (overridden) — " : ""}unsigned SetHook for ${a.account} (${r.network})`;
+    return ok(head, r as any);
+  }
   catch (e) { return fail((e as Error).message); }
 });
 
