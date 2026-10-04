@@ -1,6 +1,6 @@
 {
   "name": "xahau-mcp",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "mcpName": "io.github.Hugegreencandle/xahau-mcp",
   "description": "Model Context Protocol (stdio) server for the Xahau network: offline Hook WASM inspection, a Hooks-specific static-analysis rule engine, and read-only ledger, codec, governance and unsigned-transaction tooling. Never signs or submits.",
   "type": "module",
