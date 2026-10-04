@@ -26,6 +26,14 @@ export interface BuildResult {
   warning?: string;
 }
 
+/** SetHook result: the unsigned tx is WITHHELD (null) when preflight finds a CRITICAL issue,
+ *  unless the caller explicitly passes overrideCritical. Findings always come back. */
+export interface SetHookBuildResult extends Omit<BuildResult, "unsignedTx"> {
+  unsignedTx: Record<string, unknown> | null;
+  withheld: boolean;
+  overrideCritical: boolean;
+}
+
 export function buildSetHookUnsigned(input: {
   account: string;
   createCodeHex?: string;
@@ -37,7 +45,8 @@ export function buildSetHookUnsigned(input: {
   grants?: { authorize?: string; hookHash?: string }[];
   flags?: number;
   network?: Network;
-}): BuildResult {
+  overrideCritical?: boolean;
+}): SetHookBuildResult {
   const network = input.network ?? "testnet";
   const createCode = input.createCodeHex ?? input.wasmHex;
   if (!createCode) throw new Error("provide createCodeHex (or wasmHex)");
@@ -64,16 +73,22 @@ export function buildSetHookUnsigned(input: {
     Hook.HookParameters = input.parameters.map((p) => ({ HookParameter: { HookParameterName: p.name, HookParameterValue: p.value } }));
   if (grants.length) Hook.HookGrants = grants;
 
+  const override = input.overrideCritical === true;
+  const withheld = blocked && !override;
   return {
-    unsignedTx: { TransactionType: "SetHook", ...base(input.account, network), Hooks: [{ Hook }] },
+    unsignedTx: withheld ? null : { TransactionType: "SetHook", ...base(input.account, network), Hooks: [{ Hook }] },
     network,
     signingInstructions: SIGNING_INSTRUCTIONS,
     preflightFindings: findings,
     preflightSummary: summary,
     blocked,
-    warning: blocked
-      ? "PREFLIGHT FOUND CRITICAL ISSUES — do NOT install this hook until they are resolved. Review preflightFindings."
-      : undefined,
+    withheld,
+    overrideCritical: blocked && override,
+    warning: !blocked
+      ? undefined
+      : withheld
+        ? "PREFLIGHT FOUND CRITICAL ISSUES — the unsigned SetHook is WITHHELD. Review preflightFindings and fix the hook. To build it anyway, pass overrideCritical: true."
+        : "PREFLIGHT FOUND CRITICAL ISSUES — built ONLY because overrideCritical was set. Do NOT install this hook until they are resolved. Review preflightFindings.",
   };
 }
 
