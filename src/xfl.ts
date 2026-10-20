@@ -16,6 +16,8 @@ const INVALID_FLOAT = -10024n;
 const INVALID_ARGUMENT = -7n;       // hooks-rs c/error.h
 const CANT_RETURN_NEGATIVE = -33n;  // float_int cannot return a negative when absolute=0
 const DIVISION_BY_ZERO = -25n;
+const EXPONENT_OVERSIZED = -28n;  // xahaud include/xrpl/hook/Enum.h:369
+const EXPONENT_UNDERSIZED = -29n; // Enum.h:370
 
 interface Xfl { zero: boolean; sign: 1 | -1; mant: bigint; exp: number; }
 
@@ -38,11 +40,21 @@ export function encode(sign: 1 | -1, mant: bigint, exp: number): bigint {
   return (signBit << 62n) | (BigInt(e + 97) << 54n) | m;
 }
 
-/** float_set(exponent, mantissa) -> XFL */
+/** float_set(exponent, mantissa) -> XFL.
+ * Out of range: EXPONENT_OVERSIZED / EXPONENT_UNDERSIZED. This is the fix20261005 rule
+ * (xahaud 2026.10.13-release+4119 HookAPI.cpp:1044-1055), live on Xahau mainnet from ledger
+ * 26650113. Before that amendment both cases returned INVALID_FLOAT. */
 export function floatSet(exp: number, mant: bigint): bigint {
   if (mant === 0n) return 0n;
   const sign: 1 | -1 = mant < 0n ? -1 : 1;
-  return encode(sign, mant < 0n ? -mant : mant, exp);
+  const out = encode(sign, mant < 0n ? -mant : mant, exp);
+  if (out === INVALID_FLOAT) {
+    let m = mant < 0n ? -mant : mant;
+    let e = exp;
+    while (m >= MAX_MANT) { m /= 10n; e += 1; }
+    return e > 80 ? EXPONENT_OVERSIZED : EXPONENT_UNDERSIZED;
+  }
+  return out;
 }
 
 /** float_int(xfl, decimalPlaces, absolute) -> integer (e.g. drops). Floors toward zero. */

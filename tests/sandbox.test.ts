@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { runHook } from "../src/sandbox.js";
-import { buildExitHook, buildHookWasm, buildReadFieldHook } from "./fixtures.js";
+import { buildExitHook, buildHookWasm, buildReadFieldHook, buildSlotSetHook } from "./fixtures.js";
 
 describe("Hook VM execution bounds", () => {
   it("refuses an unguarded loop before execution (honest halt)", () => {
@@ -27,6 +27,20 @@ describe("Hook VM (sandbox)", () => {
     expect(r.fidelity).toBe("LOCAL_VM");
     expect(r.degraded).toBe(false);
     expect(r.stateApplied).toBe(true);
+  });
+
+  it("fix20260929: accept with a reason pointer outside wasm memory ends as ROLLBACK OUT_OF_BOUNDS", () => {
+    const r = runHook(buildExitHook("accept", 42, { reasonPtr: 70_000, reasonLen: 4 })); // memory = 1 page (65536)
+    expect(r.exit).toBe("rollback");
+    expect(r.returnCode).toBe("-1");
+    expect(r.stateApplied).toBe(false);
+  });
+
+  it("fix20260929: a reason that ends past wasm memory is out of bounds too; an in-bounds reason is not", () => {
+    expect(runHook(buildExitHook("accept", 42, { reasonPtr: 65_534, reasonLen: 4 })).exit).toBe("rollback");
+    const ok = runHook(buildExitHook("accept", 42, { reasonPtr: 65_532, reasonLen: 4 }));
+    expect(ok.exit).toBe("accept");
+    expect(ok.returnCode).toBe("42");
   });
 
   it("captures a rollback with its return code (state NOT applied)", () => {
@@ -111,5 +125,14 @@ describe("float_sto_set — issued/IOU amount read (requested by @xrpl_mworks)",
     expect(r.unsupportedCalls).not.toContain("float_sto_set"); // wired, not faked
     // ptr 0 in fresh memory is zeroed = not a valid STAmount → NOT_AN_AMOUNT (<0) → the hook rolls back
     expect(r.exit).toBe("rollback");
+  });
+});
+
+describe("slot_set input length (fix20261005)", () => {
+  it("rejects a 32-byte input (old tx-hash form) and other non-keylet lengths with INVALID_ARGUMENT", () => {
+    for (const len of [32, 33, 35, 40]) expect(runHook(buildSlotSetHook(len)).returnCode).toBe("-7");
+  });
+  it("a 34-byte keylet is looked up (absent here -> DOESNT_EXIST, not INVALID_ARGUMENT)", () => {
+    expect(runHook(buildSlotSetHook(34)).returnCode).toBe("-5");
   });
 });

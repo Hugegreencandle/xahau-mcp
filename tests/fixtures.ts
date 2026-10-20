@@ -161,7 +161,16 @@ export function buildReadFieldHook(readFn = "otxn_field", wl = 4, a3 = 6, a4 = 0
 // A hook that actually CALLS accept/rollback with a return code, for the VM (sandbox) tests.
 // Uses two func types: type0 ()->() for hook(); type1 (i32,i32,i64)->i64 for accept/rollback.
 // Optionally calls one extra (unsupported) import first to exercise unsupported-call tracking.
-export function buildExitHook(fn: "accept" | "rollback", code: number, opts: { extraImport?: string } = {}): Uint8Array {
+function sleb32(n: number): number[] {
+  const out: number[] = [];
+  for (;;) {
+    const b = n & 0x7f; n >>= 7;
+    if ((n === 0 && (b & 0x40) === 0) || (n === -1 && (b & 0x40) !== 0)) { out.push(b); return out; }
+    out.push(b | 0x80);
+  }
+}
+
+export function buildExitHook(fn: "accept" | "rollback", code: number, opts: { extraImport?: string; reasonPtr?: number; reasonLen?: number } = {}): Uint8Array {
   if (code < 0 || code > 63) throw new Error("test code must be 0..63 (single-byte sLEB)");
   const imports: { name: string; type: number }[] = [];
   if (opts.extraImport) imports.push({ name: opts.extraImport, type: 0 }); // ()->()
@@ -180,8 +189,25 @@ export function buildExitHook(fn: "accept" | "rollback", code: number, opts: { e
   const exp = section(7, vec([[...name("hook"), 0x00, ...uleb(localFuncIdx)], [...name("memory"), 0x02, 0x00]]));
   const body: number[] = [];
   if (extraIdx >= 0) body.push(0x10, ...uleb(extraIdx)); // call unsupported (()->()), no stack effect
-  body.push(0x41, 0x00, 0x41, 0x00, 0x42, code & 0x7f, 0x10, ...uleb(fnIdx), 0x1a); // i32.const0,i32.const0,i64.const code, call fn, drop
+  body.push(0x41, ...sleb32(opts.reasonPtr ?? 0), 0x41, ...sleb32(opts.reasonLen ?? 0), 0x42, code & 0x7f, 0x10, ...uleb(fnIdx), 0x1a); // i32.const ptr,i32.const len,i64.const code, call fn, drop
   body.push(0x0b);
+  const func1 = [...uleb(0), ...body];
+  const code10 = section(10, vec([[...uleb(func1.length), ...func1]]));
+  return new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, ...types, ...imp, ...funcs, ...mem, ...exp, ...code10]);
+}
+
+/** Hook that calls slot_set(ptr=0, len, slot=1) and accepts with slot_set's return value as the code. */
+export function buildSlotSetHook(len: number): Uint8Array {
+  const types = section(1, vec([
+    [0x60, 0x00, 0x00], // type0 () -> ()
+    [0x60, 0x03, 0x7f, 0x7f, 0x7e, 0x01, 0x7e], // type1 (i32,i32,i64) -> i64  (accept)
+    [0x60, 0x03, 0x7f, 0x7f, 0x7f, 0x01, 0x7e], // type2 (i32,i32,i32) -> i64  (slot_set)
+  ]));
+  const imp = section(2, vec([[...name("env"), ...name("slot_set"), 0x00, 0x02], [...name("env"), ...name("accept"), 0x00, 0x01]]));
+  const funcs = section(3, vec([[0x00]]));
+  const mem = section(5, vec([[0x00, 0x01]]));
+  const exp = section(7, vec([[...name("hook"), 0x00, ...uleb(2)], [...name("memory"), 0x02, 0x00]]));
+  const body = [0x41, 0x00, 0x41, 0x00, 0x41, 0x00, 0x41, ...sleb32(len), 0x41, 0x01, 0x10, 0x00, 0x10, 0x01, 0x1a, 0x0b];
   const func1 = [...uleb(0), ...body];
   const code10 = section(10, vec([[...uleb(func1.length), ...func1]]));
   return new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, ...types, ...imp, ...funcs, ...mem, ...exp, ...code10]);

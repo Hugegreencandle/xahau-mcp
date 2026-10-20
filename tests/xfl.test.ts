@@ -53,3 +53,14 @@ describe("XFL float", () => {
     expect(xfl.floatDivide(xfl.floatSet(0, 1n), 0n)).toBe(-25n); // DIVISION_BY_ZERO
   });
 });
+
+describe("float_set out of range (fix20261005)", () => {
+  it("returns EXPONENT_OVERSIZED (-28) / EXPONENT_UNDERSIZED (-29), not INVALID_FLOAT", () => {
+    expect(xfl.floatSet(81, 1_000_000_000_000_000n)).toBe(-28n);
+    expect(xfl.floatSet(-112, 1_000_000_000_000_000n)).toBe(-29n);
+    expect(xfl.floatSet(-120, -5n)).toBe(-29n);
+    expect(xfl.floatSet(80, 1_000_000_000_000_000n) > 0n).toBe(true);
+    expect(xfl.floatSet(-96, 1_000_000_000_000_000n) > 0n).toBe(true);
+  });
+});
+
