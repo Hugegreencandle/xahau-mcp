@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { runHook } from "../src/sandbox.js";
-import { buildExitHook, buildHookWasm, buildReadFieldHook, buildSlotSetHook } from "./fixtures.js";
+import { buildExitHook, buildHookWasm, buildReadFieldHook, buildSlotSetHook, buildStoEmplaceHook } from "./fixtures.js";
 
 describe("Hook VM execution bounds", () => {
   it("refuses an unguarded loop before execution (honest halt)", () => {
@@ -134,5 +134,27 @@ describe("slot_set input length (fix20261005)", () => {
   });
   it("a 34-byte keylet is looked up (absent here -> DOESNT_EXIST, not INVALID_ARGUMENT)", () => {
     expect(runHook(buildSlotSetHook(34)).returnCode).toBe("-5");
+  });
+});
+
+describe("sto_emplace matches xahaud (complete field in, fixHookAPI20251128 + fix20260929)", () => {
+  const FLAGS = Uint8Array.from([0x22, 0, 0, 0, 0]);       // sfFlags (UInt32 type 2, field 2) = 0
+  const SEQ = Uint8Array.from([0x24, 0, 0, 0, 7]);         // sfSequence (UInt32 type 2, field 4) = 7
+  const SEQ_ID = (2 << 16) | 4;
+  const cat = (...a: Uint8Array[]) => Uint8Array.from(a.flatMap((x) => [...x]));
+  it("inserts the caller's complete field verbatim (no second header)", () => {
+    expect(runHook(buildStoEmplaceHook(FLAGS, SEQ, SEQ_ID)).returnCode).toBe("10");
+  });
+  it("a field whose header does not match field_id is PARSE_ERROR", () => {
+    expect(runHook(buildStoEmplaceHook(FLAGS, FLAGS, SEQ_ID)).returnCode).toBe("-18");
+  });
+  it("a field with trailing bytes is PARSE_ERROR (fix20260929)", () => {
+    expect(runHook(buildStoEmplaceHook(FLAGS, cat(SEQ, Uint8Array.from([0])), SEQ_ID)).returnCode).toBe("-18");
+  });
+  it("an invalid source object is PARSE_ERROR (fix20260929)", () => {
+    expect(runHook(buildStoEmplaceHook(Uint8Array.from([0x22, 0, 0]), SEQ, SEQ_ID)).returnCode).toBe("-18");
+  });
+  it("(0,0) field is a delete", () => {
+    expect(runHook(buildStoEmplaceHook(cat(FLAGS, SEQ), null, SEQ_ID)).returnCode).toBe("5");
   });
 });

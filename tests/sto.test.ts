@@ -62,4 +62,8 @@ describe("STObject field walker", () => {
     const codes = stoFields(out!)!.map((f) => f.code);
     expect(codes).toEqual([...codes].sort((a, b) => a - b));
   });
+  it("a truncated last field is not a valid STObject (matches xahaud sto_validate)", () => {
+    expect(stoFields(Uint8Array.from([0x22, 0, 0]))).toBeNull();
+    expect(stoFields(Uint8Array.from([0x22, 0, 0, 0, 0]))).not.toBeNull();
+  });
 });

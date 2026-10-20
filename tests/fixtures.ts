@@ -212,3 +212,29 @@ export function buildSlotSetHook(len: number): Uint8Array {
   const code10 = section(10, vec([[...uleb(func1.length), ...func1]]));
   return new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, ...types, ...imp, ...funcs, ...mem, ...exp, ...code10]);
 }
+
+/** Hook with `src` at 1024 and `field` at 2048 (data segments) that calls
+ *  sto_emplace(4096, 512, 1024, src.length, fp, fl, fieldId) and accepts with its return value.
+ *  field === null -> delete form (fp = 0, fl = 0). */
+export function buildStoEmplaceHook(src: Uint8Array, field: Uint8Array | null, fieldId: number): Uint8Array {
+  const types = section(1, vec([
+    [0x60, 0x03, 0x7f, 0x7f, 0x7e, 0x01, 0x7e],                         // type0 accept (i32,i32,i64)->i64
+    [0x60, 0x07, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x01, 0x7e], // type1 sto_emplace 7xi32 -> i64
+    [0x60, 0x01, 0x7f, 0x01, 0x7e],                                      // type2 hook (i32)->i64
+  ]));
+  const imp = section(2, vec([[...name("env"), ...name("sto_emplace"), 0x00, 0x01], [...name("env"), ...name("accept"), 0x00, 0x00]]));
+  const funcs = section(3, vec([[0x02]]));
+  const mem = section(5, vec([[0x00, 0x01]]));
+  const exp = section(7, vec([[...name("hook"), 0x00, ...uleb(2)], [...name("memory"), 0x02, 0x00]]));
+  const fp = field ? 2048 : 0, fl = field ? field.length : 0;
+  const c = (n: number) => [0x41, ...sleb32(n)];
+  const body = [0x41, 0x00, 0x41, 0x00,                                   // accept(0, 0, <result>)
+    ...c(4096), ...c(512), ...c(1024), ...c(src.length), ...c(fp), ...c(fl), ...c(fieldId),
+    0x10, 0x00, 0x10, 0x01, 0x0b];
+  const func1 = [...uleb(0), ...body];
+  const code10 = section(10, vec([[...uleb(func1.length), ...func1]]));
+  const seg = (off: number, bytes: Uint8Array) => [0x00, 0x41, ...sleb32(off), 0x0b, ...uleb(bytes.length), ...bytes];
+  const segs = [seg(1024, src)]; if (field) segs.push(seg(2048, field));
+  const data = section(11, vec(segs));
+  return new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, ...types, ...imp, ...funcs, ...mem, ...exp, ...code10, ...data]);
+}

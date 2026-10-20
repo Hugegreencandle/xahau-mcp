@@ -78,6 +78,7 @@ export function stoFieldsPartial(blob: Uint8Array): { fields: FullField[]; compl
     const vl = valueLength(blob, hdr.next, hdr.typeCode);
     if (!vl) return { fields: out, complete: false };
     const end = hdr.next + vl.vlHeader + vl.len;
+    if (end > blob.length) return { fields: out, complete: false }; // truncated field: xahaud sto_validate -> 0
     out.push({ code: (hdr.typeCode << 16) | hdr.fieldCode, typeCode: hdr.typeCode, fieldCode: hdr.fieldCode, start, end });
     p = end;
   }
@@ -161,6 +162,7 @@ export function stoFieldRange(blob: Uint8Array, sfieldCode: number): FieldRange 
     const vl = valueLength(blob, hdr.next, hdr.typeCode);
     if (!vl) return null;
     const valStart = hdr.next + vl.vlHeader;
+    if (valStart + vl.len > blob.length) return null; // truncated field
     if (hdr.typeCode === wantType && hdr.fieldCode === wantField) {
       return { start: valStart, len: vl.len, typeCode: hdr.typeCode, fieldCode: hdr.fieldCode };
     }
