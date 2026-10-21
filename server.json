@@ -8,12 +8,12 @@
     "url": "https://github.com/Hugegreencandle/xahau-mcp",
     "source": "github"
   },
-  "version": "2.3.0",
+  "version": "2.3.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "xahau-mcp",
-      "version": "2.3.0",
+      "version": "2.3.2",
       "transport": {
         "type": "stdio"
       },
